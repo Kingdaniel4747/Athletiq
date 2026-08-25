@@ -62,6 +62,20 @@ nach Bestätigung übernommen.
 
 **Docker-, Mealie-, KI- und GitHub-Anleitung:** [docs/FITNESS_SETUP.md](docs/FITNESS_SETUP.md)
 
+### Nur eine Compose-Datei, ein Befehl
+
+```bash
+mkdir athletiq && cd athletiq
+curl -fsSLO https://raw.githubusercontent.com/Kingdaniel4747/Athletiq/main/docker-compose.yml
+docker compose up -d
+```
+
+Compose lädt die fertigen AMD64-/ARM64-Images automatisch aus GitHub Container
+Registry. Kein Repository-Clone, kein lokaler Build, keine `.env` und keine
+Node-Installation nötig. Die App läuft danach auf Port `8080`; persönliche Daten
+bleiben dauerhaft in `./data`. Für eine Domain, HTTPS, Mealie oder einen
+KI-Anbieter kann optional eine `.env` neben die Compose-Datei gelegt werden.
+
 ## Why
 
 Most workout apps lock your data behind a login on their servers, nag you to upgrade, or
@@ -109,26 +123,23 @@ as a home-screen app, passkey sign-in, offline support, sync across your phone a
 You need [Docker](https://docs.docker.com/get-docker/) with Compose.
 
 ```bash
-git clone https://gitlab.com/DuarteSantos8/opengym
-cd openGym
-cp .env.example .env
-docker compose pull   # grab prebuilt images (amd64 + arm64) — skip to build from source instead
+mkdir athletiq && cd athletiq
+curl -fsSLO https://raw.githubusercontent.com/Kingdaniel4747/Athletiq/main/docker-compose.yml
 docker compose up -d
 ```
 
-Open **http://localhost:8080**, tap **Create profile**, and you're in. First launch downloads
-the exercise media (~140 MB) once.
+That single Compose file pulls the ready-made Athletiq API and web images for
+amd64 or arm64. No source checkout and no build toolchain are required. Open
+**http://localhost:8080**; the first launch downloads the exercise media
+(~140 MB) once.
 
 > **About that media:** it reaches openGym through
 > [hasaneyldrm/exercises-dataset](https://github.com/hasaneyldrm/exercises-dataset), which
 > redistributes [ExerciseDB v1](https://exercisedb.dev/) — its metadata and instruction text are
 > MIT, but the images and animations are third-party content under *neither* that MIT license nor
 > openGym's AGPL, and their ownership is currently disputed between Gym visual and ExerciseDB.
-> openGym ships none of it: your instance downloads it from upstream. Reusing it yourself,
+> Athletiq ships none of it: your instance downloads it from upstream. Reusing it yourself,
 > commercially or not, means clearing it with the rights holder — see [NOTICE.md](NOTICE.md).
- Prefer building the images yourself instead of pulling from
-GitLab's registry? Drop the `pull` step and run `docker compose up -d --build` — you don't need Node or
-a build step locally either way.
 
 > Want it reachable from your phone over the internet with passkeys? You'll need an HTTPS
 > domain — a two-line change in `.env`. See **[docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)**.

@@ -6,24 +6,49 @@ Daten bleiben im gemounteten Ordner `data/` deines Servers.
 
 ## 1. Mit Docker starten
 
-Voraussetzungen: Docker Engine und Docker Compose v2.
+Voraussetzungen: Docker Engine mit Docker Compose. Eine lokale Node-, npm-, Git-
+oder Programmierumgebung ist nicht nötig. Es wird nur eine Compose-Datei
+heruntergeladen.
+
+```bash
+mkdir athletiq && cd athletiq
+curl -fsSLO https://raw.githubusercontent.com/Kingdaniel4747/Athletiq/main/docker-compose.yml
+docker compose up -d
+```
+
+Compose lädt die fertigen Athletiq-Images für AMD64 oder ARM64 automatisch aus
+GitHub Container Registry. Das ist die vollständige Testinstallation. Eine
+`.env`-Datei und der restliche Quellcode sind nicht erforderlich. Danach ist
+die App auf dem Docker-Rechner unter
+`http://localhost:8080` und im lokalen Netzwerk unter
+`http://SERVER-IP:8080` erreichbar. Beim ersten Start werden die Übungsmedien
+einmalig heruntergeladen. Sichere den Ordner `data/` regelmäßig; dort liegen
+Benutzer, Passkeys, Trainings- und Ernährungsdaten.
+
+Status und Logs:
+
+```bash
+docker compose ps
+docker compose logs --tail=100 api web media
+```
+
+Für einen schnellen Test über eine Server-IP verwendest du den Gastmodus.
+Passkeys, PWA-Installation und Kamerazugriff benötigen HTTPS oder `localhost`.
+
+Nur wenn du Einstellungen ändern möchtest, kopierst du die Vorlage:
 
 ```bash
 cp .env.example .env
-docker compose up -d --build
 ```
 
-Danach ist die App standardmäßig unter `http://localhost:8080` erreichbar. Beim
-ersten Start werden die Übungsmedien einmalig heruntergeladen. Sichere den
-Ordner `data/` regelmäßig; dort liegen Benutzer, Passkeys, Trainings- und
-Ernährungsdaten.
-
-Für eine echte Domain brauchst du HTTPS. Setze in `.env` mindestens:
+Für eine echte Domain brauchst du HTTPS. Setze in der optionalen `.env`
+mindestens:
 
 ```dotenv
-RP_ID=gym.example.com
-ORIGIN=https://gym.example.com
+RP_ID=athletiq.example.com
+ORIGIN=https://athletiq.example.com
 WEB_PORT=8080
+RP_NAME=Athletiq
 ```
 
 Der Reverse Proxy zeigt dann auf Port 8080. Passkeys und Kamerazugriff für den
@@ -52,7 +77,7 @@ MEALIE_API_TOKEN=dein-token
 Danach genügt:
 
 ```bash
-docker compose up -d --build api web
+docker compose up -d api web
 ```
 
 Das Token wird nicht an den Browser geschickt. Rezepte mit hinterlegten
@@ -75,7 +100,7 @@ Für einen Cloud-Anbieter setzt du dessen vollständige Chat-Completions-URL,
 Modellnamen und API-Key. Danach API und Web neu bauen/starten:
 
 ```bash
-docker compose up -d --build api web
+docker compose up -d api web
 ```
 
 Der Coach sendet nur eine kompakte Trend-Zusammenfassung, den aktuellen Plan
@@ -113,11 +138,25 @@ zugehörigen Quellcode gemäß der Lizenz zugänglich machen.
 ## 6. Aktualisieren und Diagnose
 
 ```bash
-git pull
-docker compose up -d --build
+curl -fsSL https://raw.githubusercontent.com/Kingdaniel4747/Athletiq/main/docker-compose.yml -o docker-compose.yml
+docker compose pull
+docker compose up -d
 docker compose ps
 docker compose logs -f api web
 ```
 
-Bei einem Umzug kopierst du das Repository, deine `.env`, den Ordner `data/`
-und optional den bereits geladenen Ordner `media/` auf den neuen Server.
+Bei einem Umzug kopierst du die Compose-Datei, deine optionale `.env`, den
+Ordner `data/` und optional den bereits geladenen Ordner `media/` auf den neuen
+Server.
+
+### Einmalig für den Repository-Eigentümer
+
+Der Workflow `.github/workflows/docker-publish.yml` baut und veröffentlicht bei
+jedem Push auf `main` automatisch beide Plattform-Images:
+
+- `ghcr.io/kingdaniel4747/athletiq-api:latest`
+- `ghcr.io/kingdaniel4747/athletiq-web:latest`
+
+Nach dem ersten erfolgreichen Workflow unter GitHub **Packages** bei beiden
+Paketen **Package settings → Change visibility → Public** wählen. Erst öffentliche
+GHCR-Pakete können fremde Docker-Server ohne GitHub-Anmeldung herunterladen.

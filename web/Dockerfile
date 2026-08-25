@@ -1,5 +1,5 @@
-# Multi-stage: build the React app, then serve it with nginx.
-# Self-hosters never need Node locally — `docker compose up` builds everything.
+# Multi-stage: build the React app, then serve it with nginx. GitHub Actions
+# publishes this image; self-hosters only pull it through docker compose.
 #
 # --platform=$BUILDPLATFORM pins the build stage to the host's native arch even when
 # cross-building for other targets (e.g. amd64 host building an arm64 image). The build
@@ -19,12 +19,12 @@ ARG VERSION=dev
 ARG VCS_REF=dev
 ARG BUILD_DATE=unknown
 
-LABEL maintainer="Duarte Santos https://gitlab.com/DuarteSantos8" \
-    org.opencontainers.image.title="opengym-web" \
-    org.opencontainers.image.description="Frontend for Self-hosted gym & body-weight tracker — plan routines, log workouts (supersets & cardio too), track your weight and progress, passkey login. Your data, your server." \
-    org.opencontainers.image.source="https://gitlab.com/DuarteSantos8/opengym" \
-    org.opencontainers.image.url="https://gitlab.com/DuarteSantos8/opengym/container_registry" \
-    org.opencontainers.image.documentation="https://gitlab.com/DuarteSantos8/opengym#readme" \
+LABEL maintainer="Kingdaniel4747 https://github.com/Kingdaniel4747" \
+    org.opencontainers.image.title="athletiq-web" \
+    org.opencontainers.image.description="Frontend for the self-hosted Athletiq training, nutrition and progress tracker." \
+    org.opencontainers.image.source="https://github.com/Kingdaniel4747/Athletiq" \
+    org.opencontainers.image.url="https://github.com/Kingdaniel4747/Athletiq/pkgs/container/athletiq-web" \
+    org.opencontainers.image.documentation="https://github.com/Kingdaniel4747/Athletiq#readme" \
     org.opencontainers.image.licenses="AGPL-3.0-or-later" \
     org.opencontainers.image.version=$VERSION \
     org.opencontainers.image.revision=$VCS_REF \
@@ -47,4 +47,3 @@ HEALTHCHECK --interval=5m \
             --timeout=5s \
             --retries=3 \
             CMD wget --spider -q "http://127.0.0.1:${NGINX_PORT}/" || exit 1
-

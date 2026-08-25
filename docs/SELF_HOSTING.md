@@ -1,24 +1,22 @@
-# Self-hosting openGym
+# Self-hosting Athletiq
 
-openGym is two small containers (a web server and an API) plus a folder of your data.
-This guide takes you from "just cloned it" to "using it from my phone over the internet".
+Athletiq is two small containers (a web server and an API) plus a folder of your data.
+This guide takes you from one Compose file to using it from your phone over the internet.
 
 ## 1. Run it locally (5 minutes)
 
 Requirements: [Docker](https://docs.docker.com/get-docker/) with the Compose plugin.
 
 ```bash
-git clone https://gitlab.com/DuarteSantos8/opengym
-cd openGym
-cp .env.example .env
-docker compose pull   # prebuilt images from GitLab (amd64 + arm64) — or skip and build from source
+mkdir athletiq && cd athletiq
+curl -fsSLO https://raw.githubusercontent.com/Kingdaniel4747/Athletiq/main/docker-compose.yml
 docker compose up -d
 ```
 
 - First start downloads the exercise images/GIFs (~140 MB) once into `media/img` and `media/gif`.
 - Open **http://localhost:8080** and create a profile with a passkey.
-- Rather build from source than pull prebuilt images? Skip `docker compose pull` and run
-  `docker compose up -d --build` instead — no Node needed locally either way.
+- Compose pulls the ready-made Athletiq API and web images for amd64 or arm64
+  from GitHub Container Registry.
 
 Check it's healthy:
 
@@ -202,16 +200,9 @@ in `.env` if you would rather they had an inbox.
 Running prebuilt images:
 
 ```bash
-git pull                    # picks up compose/config changes
+curl -fsSL https://raw.githubusercontent.com/Kingdaniel4747/Athletiq/main/docker-compose.yml -o docker-compose.yml
 docker compose pull
 docker compose up -d
-```
-
-Building from source instead:
-
-```bash
-git pull
-docker compose up -d --build
 ```
 
 The app shell is versioned (`?v=N`) so clients pick up changes on next load. Your `./data` and the
@@ -228,7 +219,7 @@ downloaded media are untouched.
 | No "Notifications" option in Settings | Requires a signed-in profile and HTTPS (or `localhost`) — guest mode and plain HTTP over LAN can't subscribe. |
 | Day reminder fires at the wrong time | Toggle it off and on in Settings so it re-detects your browser's timezone (also happens automatically on every app load — see section 7). |
 | Want to reset a stuck login | Delete the cookie in your browser; sessions are just signed cookies. |
-| `docker compose pull` fails with "denied" / "unauthorized" | The prebuilt images aren't published yet, or need to be, or the GHCR package is still private — build from source instead (`docker compose up -d --build`). |
+| `docker compose pull` fails with "denied" / "unauthorized" | The image has not been published yet or its GHCR package is not public. The repository owner must publish it and set both `athletiq-api` and `athletiq-web` to Public. |
 | Exercise images/GIFs blank when a routine is open | Fixed in current images (issue #79). On an older build, see the note below. |
 
 ### `VITE_IMG_BASE` / `VITE_GIF_BASE` are build-time, not run-time
@@ -237,6 +228,6 @@ These two are read by Vite when the frontend is **compiled**, so their values ar
 the shipped JavaScript bundle. Setting them in the `.env` next to `docker compose` has no
 effect on an already-built image — the bundle has already made up its mind.
 
-They are only useful if you build the frontend yourself (`docker compose up -d --build`, or a
-`npm run build` with the variables exported). If you need to redirect media on a prebuilt
+They are only useful if you build the frontend source yourself with `npm run build` and the
+variables exported. If you need to redirect media on a prebuilt
 image, do it in your reverse proxy instead.
