@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Contributing guide
+    url: https://github.com/Kingdaniel4747/Athletiq/blob/main/CONTRIBUTING.md
+    about: Development setup and checks before opening a pull request.
