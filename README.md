@@ -37,8 +37,13 @@ docker compose up -d
 ```
 
 Öffne danach **http://localhost:8080**. Fertige Images für AMD64 und ARM64 werden
-automatisch aus der GitHub Container Registry geladen. Beim ersten Start werden die
-Übungsbilder einmalig in `./media` geladen; Benutzerdaten bleiben in `./data`.
+automatisch aus der GitHub Container Registry geladen. Es läuft nur ein Container; alle
+Benutzerdaten bleiben im Ordner `./.athletiq`.
+
+Beim ersten Öffnen zeigt AthletiQ die Nachricht **„Übungsmedien herunterladen“**. Mit
+**„Alles herunterladen“** werden Bilder und Animationen einmalig im jeweiligen Browser
+gespeichert (etwa 140 MB). Auf dem Server entsteht kein zusätzlicher Medienordner. Ohne
+Download funktionieren die Medien weiterhin online.
 
 Für Updates genügt:
 
@@ -47,8 +52,9 @@ docker compose pull
 docker compose up -d
 ```
 
-> Die beiden GHCR-Pakete `athletiq-api` und `athletiq-web` müssen im GitHub-Repository
-> einmalig auf **Public** gestellt werden, damit der Schnellstart ohne Anmeldung klappt.
+> Das GHCR-Paket `athletiq` muss nach dem ersten erfolgreichen Workflow-Lauf in GitHub
+> einmalig auf **Public** gestellt werden. Danach kann jeder das Image ohne Anmeldung
+> mit dieser Compose-Datei laden.
 
 ## Funktionen
 
@@ -106,11 +112,12 @@ Passkeys, Installation als PWA und Push-Nachrichten solltest du außerhalb von
 ## Daten und Datenschutz
 
 - AthletiQ enthält keine Telemetrie und kein Werbe-Tracking.
-- Profile und Zustände liegen im gemounteten Ordner `./data`.
-- Übungsmedien liegen in `./media` und können jederzeit neu geladen werden.
+- Profile und Zustände liegen im gemounteten Ordner `./.athletiq`.
+- Übungsmedien werden auf Wunsch lokal im jeweiligen Browser gespeichert; auf dem Server
+  gibt es dafür weder Volume noch Medienordner.
 - Mealie- und KI-Schlüssel werden nur vom Backend verwendet und nicht an den Browser
   ausgeliefert.
-- Vor Updates sollte mindestens `./data` gesichert werden.
+- Vor Updates sollte `./.athletiq` gesichert werden.
 
 Der Coach ist ein Planungswerkzeug und kein Ersatz für medizinische Beratung. Bei
 Krankheiten, Essstörungen, Schwangerschaft oder ungewöhnlichen Beschwerden gehören
@@ -134,7 +141,7 @@ node --check api/server.js
 ```
 
 Der GitHub-Workflow [docker-publish.yml](.github/workflows/docker-publish.yml) baut bei
-Pushes auf `main` und bei Releases automatisch die beiden Multi-Arch-Images. Der
+Pushes auf `main` und bei Releases automatisch ein Multi-Arch-Image. Der
 [Test-Workflow](.github/workflows/test.yml) prüft Frontend, API, Übersetzungen, Build
 und Compose-Konfiguration.
 
@@ -145,4 +152,3 @@ Weiterverteilung nicht entfernt oder durch eine proprietäre Lizenz ersetzt werd
 Rechtlich notwendige Herkunfts- und Drittanbieterhinweise stehen in
 [NOTICE.md](NOTICE.md). Die Übungsbilder und Animationen sind Drittinhalte und werden
 nicht durch die AGPL dieses Repositorys lizenziert.
-

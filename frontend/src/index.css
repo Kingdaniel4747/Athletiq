@@ -169,7 +169,7 @@ button,.chip,.tile,.item,.wday,.cal-d,.swatch,.hm-c,.lrow,.seg button,.stp butto
    (the rest variant is two rows tall — ~44px more than the single-row work timer) */
 body.resting #app{padding-bottom:calc(250px + var(--sab))}
 @keyframes viewfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-#app.vfade{animation:viewfade var(--med) var(--ease)}
+#app .vfade{animation:viewfade var(--med) var(--ease)}
 
 /* large title, the way a nav bar does it */
 .hdr{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:8px 0 18px}
@@ -940,6 +940,16 @@ h4.sec{
 :root[data-mode="nutrition"] .mode-switch-thumb{background:color-mix(in srgb,var(--orange) 19%,var(--surface-2))}
 .mode-switch button{flex:1;z-index:1;display:flex;align-items:center;justify-content:center;gap:7px;color:var(--label-2);font-size:14px;font-weight:500;transition:color var(--fast)}
 .mode-switch button .icn{font-size:18px}.mode-switch button.on{color:var(--acc);font-weight:650}
+
+/* One-time, browser-local exercise library download. It sits in the normal document flow
+   so it never blocks navigation or looks like a consent wall. */
+.media-download{max-width:420px;margin:-7px auto 18px;padding:14px;display:flex;gap:12px;background:var(--surface);border-radius:var(--r-card);box-shadow:inset 0 0 0 var(--hair) var(--sep-op)}
+.media-download-icon{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;flex:none;background:var(--acc-soft);color:var(--acc);font-size:21px}
+.media-download-copy{min-width:0;flex:1}.media-download-copy strong{display:block;font-size:15px;font-weight:600;margin:1px 0 4px}.media-download-copy p{font-size:13px;line-height:1.38;color:var(--label-2)}
+.media-download-progress{margin-top:10px}.media-download-progress progress{display:block;width:100%;height:5px;border:0;border-radius:9px;overflow:hidden;background:var(--surface-3);accent-color:var(--acc)}
+.media-download-progress progress::-webkit-progress-bar{background:var(--surface-3)}.media-download-progress progress::-webkit-progress-value{background:var(--acc)}
+.media-download-progress span{display:block;margin-top:5px;color:var(--label-2);font-size:12px}.media-download-copy .media-download-error{margin-top:8px;color:var(--red)}
+.media-download-actions{display:flex;align-items:center;gap:8px;margin-top:11px}.media-download-actions button{min-height:32px;padding:5px 10px;border-radius:8px;color:var(--acc);font-size:13px;font-weight:600}.media-download-actions .media-download-primary{background:var(--acc);color:var(--on-acc)}.media-download-actions button:disabled{opacity:.55;cursor:default}
 .nutrition-page .hdr{margin-top:2px}.nutrition-page .hdr h1{color:var(--label)}
 .header-icon{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--acc-soft);color:var(--acc);font-size:22px}
 .eyebrow{display:block;color:var(--acc);font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-bottom:4px}

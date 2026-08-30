@@ -11,6 +11,8 @@ Alle wichtigen Änderungen an AthletiQ werden hier dokumentiert.
   Überlastung.
 - Optionaler KI-Coach mit bestätigungspflichtigen Vorschlägen für Ernährung und
   Trainingsplan.
-- Standalone `docker-compose.yml` mit fertigen GHCR-Images für AMD64 und ARM64.
+- Ein einziges GHCR-Image für Web-App und API sowie eine Ein-Service-Compose-Datei.
+- Einmaliger Download der 1.324 Übungsbilder und Animationen in den Browser statt
+  eines Medien-Containers und Serverordners.
 - Repository auf GitHub Actions, GitHub Issues und GitHub Container Registry reduziert.
 - Nicht verwendete Plattform-, Demo- und native Wrapper-Pakete entfernt.

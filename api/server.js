@@ -12,6 +12,7 @@ import webpush from 'web-push';
 
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
+const WEB = path.resolve(process.env.WEB_DIR || path.join(process.cwd(), 'public'));
 const RP_ID = process.env.RP_ID || 'localhost';
 const ORIGIN = process.env.ORIGIN || 'http://localhost:8080';
 const RP_NAME = process.env.RP_NAME || 'AthletiQ';
@@ -233,6 +234,47 @@ function json(res, code, obj, extraHeaders) {
   const body = JSON.stringify(obj);
   res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(extraHeaders || {}) });
   res.end(body);
+}
+
+// The production image contains the compiled React app next to this API. Serving both from
+// one Node process keeps the public Compose stack to a single container and, importantly for
+// passkeys, one origin. Unknown non-API paths fall back to index.html for the client router.
+const WEB_MIME = {
+  '.avif': 'image/avif', '.css': 'text/css; charset=utf-8', '.gif': 'image/gif',
+  '.html': 'text/html; charset=utf-8', '.ico': 'image/x-icon',
+  '.jpeg': 'image/jpeg', '.jpg': 'image/jpeg', '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8', '.png': 'image/png',
+  '.svg': 'image/svg+xml; charset=utf-8', '.webmanifest': 'application/manifest+json',
+  '.webp': 'image/webp', '.woff': 'font/woff', '.woff2': 'font/woff2'
+};
+function serveWeb(req, res, pathname) {
+  if (!['GET', 'HEAD'].includes(req.method) || !fs.existsSync(WEB)) return false;
+  let relative;
+  try { relative = decodeURIComponent(pathname).replace(/^\/+/, ''); }
+  catch { json(res, 400, { error: 'bad path' }); return true; }
+
+  let file = path.resolve(WEB, relative || 'index.html');
+  if (file !== WEB && !file.startsWith(WEB + path.sep)) {
+    json(res, 403, { error: 'forbidden' });
+    return true;
+  }
+  try {
+    if (fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
+  } catch { file = path.join(WEB, 'index.html'); }
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return false;
+
+  const ext = path.extname(file).toLowerCase();
+  const hashedAsset = file.startsWith(path.join(WEB, 'assets') + path.sep);
+  const headers = {
+    'Content-Type': WEB_MIME[ext] || 'application/octet-stream',
+    'Content-Length': fs.statSync(file).size,
+    'Cache-Control': hashedAsset ? 'public, max-age=31536000, immutable' : 'no-cache, must-revalidate',
+    'X-Content-Type-Options': 'nosniff'
+  };
+  res.writeHead(200, headers);
+  if (req.method === 'HEAD') res.end();
+  else fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
+  return true;
 }
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -934,10 +976,13 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const key = req.method + ' ' + url.pathname;
   const handler = routes[key];
-  if (!handler) return json(res, 404, { error: 'not found' });
+  if (!handler) {
+    if (!url.pathname.startsWith('/api') && serveWeb(req, res, url.pathname)) return;
+    return json(res, 404, { error: 'not found' });
+  }
   try { await handler(req, res); }
   catch (e) {
     console.error(key, e);
     if (!res.headersSent) json(res, 500, { error: 'server error' });
   }
-}).listen(PORT, () => console.log(`athletiq-api on :${PORT} (rpID=${RP_ID}, origin=${ORIGIN})`));
+}).listen(PORT, () => console.log(`AthletiQ on :${PORT} (rpID=${RP_ID}, origin=${ORIGIN})`));

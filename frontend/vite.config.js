@@ -2,7 +2,6 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 const backend = process.env.API_TARGET || 'http://127.0.0.1:3000'
-const media = process.env.MEDIA_TARGET || 'http://127.0.0.1:8888'
 
 // Optional web analytics (Umami). Injected only when BOTH vars are set at build time,
 // so a plain `npm run build` — and every self-hosted install — stays telemetry-free.
@@ -27,9 +26,7 @@ export default defineConfig({
   base: './',
   server: {
     proxy: {
-      '/api': { target: backend, changeOrigin: true },
-      '/img': { target: media, changeOrigin: true },
-      '/gif': { target: media, changeOrigin: true }
+      '/api': { target: backend, changeOrigin: true }
     }
   },
   build: { chunkSizeWarningLimit: 1500 }

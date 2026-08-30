@@ -1,9 +1,6 @@
-# Exercise media — fetched on first `docker compose up` (or via scripts/fetch-media.sh)
-media/img/
-media/gif/
-
 # Runtime data — users, passkeys, per-user state, session secret
 data/
+.athletiq/
 
 # Local config
 .env

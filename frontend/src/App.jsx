@@ -11,6 +11,7 @@ import { startFlow } from './sheets.jsx'
 import Icon from './components/Icon.jsx'
 import TabBar from './components/TabBar.jsx'
 import ModeSwitch from './components/ModeSwitch.jsx'
+import MediaDownloadPrompt from './components/MediaDownloadPrompt.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import Modals from './components/Modals.jsx'
 import Toast from './components/Toast.jsx'
@@ -68,30 +69,34 @@ function Shell() {
 
   return (
     <>
-      {/* keyed on the route: a view that throws is contained, and switching tabs
-          re-mounts the boundary, so the tab bar is always a way out */}
-      <div id="app" className="vfade" key={loc.pathname}>
+      <div id="app">
         {authed && loc.pathname !== '/workout' && <ModeSwitch />}
-        <ErrorBoundary>
-          {!authed ? <Login /> : (
-            <Routes>
-              <Route path="/home" element={<Home />} />
-              <Route path="/plan" element={<Plan />} />
-              <Route path="/plan/r/:id" element={<RoutineEdit />} />
-              <Route path="/workout" element={<Workout />} />
-              <Route path="/stats" element={<Stats />} />
-              <Route path="/history" element={<History />} />
-              <Route path="/library" element={<Library />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/admin" element={user?.admin ? <Admin /> : <Navigate to="/home" replace />} />
-              <Route path="/nutrition" element={<NutritionHome />} />
-              <Route path="/nutrition/foods" element={<NutritionFoods />} />
-              <Route path="/nutrition/progress" element={<NutritionProgress />} />
-              <Route path="/nutrition/coach" element={<Coach />} />
-              <Route path="*" element={<Navigate to="/home" replace />} />
-            </Routes>
-          )}
-        </ErrorBoundary>
+        {authed && <MediaDownloadPrompt hidden={loc.pathname === '/workout'} />}
+        {/* keyed on the route: a view that throws is contained, and switching tabs
+            re-mounts the boundary, so the tab bar is always a way out. The download
+            prompt stays mounted outside this key, allowing an active download to finish. */}
+        <div className="vfade" key={loc.pathname}>
+          <ErrorBoundary>
+            {!authed ? <Login /> : (
+              <Routes>
+                <Route path="/home" element={<Home />} />
+                <Route path="/plan" element={<Plan />} />
+                <Route path="/plan/r/:id" element={<RoutineEdit />} />
+                <Route path="/workout" element={<Workout />} />
+                <Route path="/stats" element={<Stats />} />
+                <Route path="/history" element={<History />} />
+                <Route path="/library" element={<Library />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/admin" element={user?.admin ? <Admin /> : <Navigate to="/home" replace />} />
+                <Route path="/nutrition" element={<NutritionHome />} />
+                <Route path="/nutrition/foods" element={<NutritionFoods />} />
+                <Route path="/nutrition/progress" element={<NutritionProgress />} />
+                <Route path="/nutrition/coach" element={<Coach />} />
+                <Route path="*" element={<Navigate to="/home" replace />} />
+              </Routes>
+            )}
+          </ErrorBoundary>
+        </div>
       </div>
       <TabBar onStart={startFlow} />
       <RestTimer />

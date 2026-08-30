@@ -6,6 +6,7 @@ on:
     paths:
       - 'frontend/**'
       - 'api/**'
+      - 'Dockerfile'
       - 'docker-compose.yml'
       - '.env.example'
       - '.github/workflows/test.yml'
@@ -14,6 +15,7 @@ on:
     paths:
       - 'frontend/**'
       - 'api/**'
+      - 'Dockerfile'
       - 'docker-compose.yml'
       - '.env.example'
       - '.github/workflows/test.yml'
@@ -31,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # node:22-alpine in web/Dockerfile and api/Dockerfile — CI must match production.
+      # node:22-alpine in the root Dockerfile — CI must match production.
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -58,3 +60,5 @@ jobs:
       # Property probe over ~108k comparisons; too slow for the unit suite, cheap here.
       - run: npm run test:fatigue-probe
         working-directory: frontend
+      # Verifies the exact one-image artifact consumed by the public Compose file.
+      - run: docker build --tag athletiq:test .

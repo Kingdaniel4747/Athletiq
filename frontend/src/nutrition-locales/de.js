@@ -2,6 +2,18 @@
 // the core locale packs retain their strict,
 // synchronized key set while untranslated languages cleanly fall back to English.
 export default {
+  'Exercise media ready': 'Übungsmedien sind bereit',
+  'Download exercise media': 'Übungsmedien herunterladen',
+  'Images and animations are now stored in this browser.': 'Bilder und Animationen sind jetzt in diesem Browser gespeichert.',
+  'Download all exercise images and animations once for faster and offline use. About 140 MB will be stored in this browser, not on your server.': 'Lade alle Übungsbilder und Animationen einmalig herunter – für schnellere Nutzung und offline. Etwa 140 MB werden in diesem Browser gespeichert, nicht auf deinem Server.',
+  '{0}% · {1} of {2} files': '{0} % · {1} von {2} Dateien',
+  '{0} files could not be downloaded. Tap retry to continue.': '{0} Dateien konnten nicht geladen werden. Tippe auf Wiederholen, um fortzufahren.',
+  'Offline storage requires HTTPS (or localhost). Online exercise media still works.': 'Die Offline-Speicherung benötigt HTTPS (oder localhost). Online funktionieren die Übungsmedien weiterhin.',
+  'Downloading…': 'Wird heruntergeladen …',
+  'Retry': 'Wiederholen',
+  'Download all': 'Alles herunterladen',
+  'Done': 'Fertig',
+  'Later': 'Später',
   'App mode': 'App-Bereich',
   'Progress': 'Fortschritt',
   'Coach': 'Coach',

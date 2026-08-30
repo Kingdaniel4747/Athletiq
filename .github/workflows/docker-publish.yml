@@ -1,4 +1,4 @@
-name: Publish Docker images
+name: Publish Docker image
 
 # Main always publishes `latest`; published semantic-version releases additionally
 # receive version tags. Images are built for AMD64 and ARM64 in GHCR.
@@ -16,15 +16,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - image: api
-            context: ./api
-            file: ./api/Dockerfile
-          - image: web
-            context: .
-            file: ./web/Dockerfile
     steps:
       - uses: actions/checkout@v7
 
@@ -57,7 +48,7 @@ jobs:
       - uses: docker/metadata-action@v6
         id: meta
         with:
-          images: ghcr.io/${{ steps.repo.outputs.owner }}/athletiq-${{ matrix.image }}
+          images: ghcr.io/${{ steps.repo.outputs.owner }}/athletiq
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
@@ -65,8 +56,8 @@ jobs:
 
       - uses: docker/build-push-action@v7
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.file }}
+          context: .
+          file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           build-args: |
             VERSION=${{ steps.version_meta.outputs.VERSION }}
@@ -75,5 +66,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          cache-from: type=gha,scope=athletiq
+          cache-to: type=gha,mode=max,scope=athletiq

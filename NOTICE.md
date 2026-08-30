@@ -75,13 +75,13 @@ SOFTWARE.
 
 ## Übungsbilder und Animationen
 
-Die Bilder und GIFs sind nicht Bestandteil dieses Repositorys oder der AthletiQ-Images.
-Der `media`-Service lädt sie beim ersten Start direkt aus dem oben genannten Datensatz.
-Sie sind weder durch dessen MIT-Lizenz für Metadaten noch durch die AGPL von AthletiQ
+Die Bilder und GIFs sind nicht Bestandteil dieses Repositorys oder des AthletiQ-Images.
+Die Web-App bietet einen einmaligen Download direkt aus dem oben genannten Datensatz in
+den lokalen Browser-Cache an. Sie sind weder durch dessen MIT-Lizenz für Metadaten noch
+durch die AGPL von AthletiQ
 abgedeckt. Der Upstream nennt Gym visual als Rechteinhaber; ExerciseDB veröffentlicht
 separate Bedingungen. Wer diese Medien weiterverwenden oder öffentlich anbieten möchte,
 muss die dafür nötigen Rechte selbst prüfen und einholen.
 
 Weitere beteiligte Open-Source-Pakete sind in den jeweiligen `package.json`- und
 Lock-Dateien dokumentiert und unter ihren eigenen Lizenzen verfügbar.
-

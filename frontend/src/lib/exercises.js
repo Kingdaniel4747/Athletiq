@@ -46,18 +46,14 @@ export function registerCustom(list) {
 // Full searchable catalogue — customs first so your own exercises are easy to find.
 export const allExercises = st => [...(st.customEx || []), ...EXDB]
 
-// Media normally sits next to the app (img/ and gif/, mounted into the web container).
-// A build can point them somewhere else — the demo build pulls them off a CDN instead of
-// shipping ~140 MB of images into the deployment. `import.meta.env` is undefined in plain
-// Node; the guard keeps this module loadable without Vite.
-// The defaults are absolute on purpose (issue #79). A bare 'img/' resolves against the
-// current document's directory, so on the one two-segment route in the app, /plan/r/:id,
-// every request went to /plan/r/img/… and 404'd — and nginx's extension block has no
-// try_files, so it 404s rather than falling through to index.html, leaving a blank image
-// and nothing in the console.
+// Exercise media remains third-party content and is not bundled with AthletiQ's image. The
+// catalogue points at the matching, pinned upstream revision. MediaDownloadPrompt lets each
+// browser cache these files once for faster/offline use without creating a server media folder.
+// A custom build can still override both bases through Vite environment variables.
 const ENV = import.meta.env || {}
-const IMG_BASE = ENV.VITE_IMG_BASE || '/img/'
-const GIF_BASE = ENV.VITE_GIF_BASE || '/gif/'
+const DATASET = 'https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@7455efae41b330c265e7cd4b78dfa848e7ce5ebd/'
+export const IMG_BASE = ENV.VITE_IMG_BASE || DATASET + 'images/'
+export const GIF_BASE = ENV.VITE_GIF_BASE || DATASET + 'videos/'
 export const imgSrc = ex => IMG_BASE + ex.img
 export const gifSrc = ex => GIF_BASE + ex.gif
 
