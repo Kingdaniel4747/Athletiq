@@ -21,8 +21,13 @@ Der Offline-Cache benötigt HTTPS oder `localhost`; ohne ihn werden Medien onlin
 ## Domain und HTTPS
 
 Außerhalb von `localhost` benötigen Passkeys, Kamera-Zugriff, PWA-Installation und
-Push-Nachrichten HTTPS. Richte einen Reverse Proxy oder Tunnel vor Port 8080 ein und
-lege eine `.env` neben die Compose-Datei:
+Push-Nachrichten HTTPS. Mit `RP_ID=auto` und `ORIGIN=auto` übernimmt AthletiQ
+automatisch die im Browser verwendete Domain. Bei einem Reverse Proxy werden
+`X-Forwarded-Host` und `X-Forwarded-Proto` berücksichtigt. Das ist der
+Zero-Configuration-Standard der Compose-Datei.
+
+Für eine dauerhaft feste Produktionsdomain kann man beide Werte in einer `.env`
+neben der Compose-Datei anheften:
 
 ```dotenv
 RP_ID=athletiq.example.com
@@ -34,6 +39,10 @@ RP_NAME=AthletiQ
 `RP_ID` enthält nur den Hostnamen. `ORIGIN` enthält Protokoll und Hostname, aber keinen
 abschließenden Slash. Bereits registrierte Passkeys sind an den alten Hostnamen gebunden;
 bei einem Domainwechsel müssen neue Passkeys angelegt werden.
+
+Ein Zugriff über `http://192.168.x.x:8080` reicht für Passkeys nicht. AthletiQ zeigt
+dafür nun eine verständliche HTTPS-Meldung und bietet – sofern erlaubt – weiterhin den
+Gastmodus. Verwende eine HTTPS-Domain oder öffne den Dienst direkt als `localhost`.
 
 ## Benutzer und Admin
 
@@ -73,8 +82,10 @@ Typische Ursachen:
 
 - **GHCR-Zugriff verweigert:** Das Container-Paket `athletiq` im GitHub-Repository einmalig
   auf Public stellen.
-- **Passkey-Fehler:** `RP_ID`, `ORIGIN` und Browser-Adresse stimmen nicht exakt überein
-  oder HTTPS fehlt.
+- **Passkey-Fehler:** Unter `/api/config` zeigt `webauthn` die vom Server erkannte
+  Origin und RP-ID. Bei `auto` muss der Reverse Proxy den öffentlichen Host und
+  `X-Forwarded-Proto: https` weitergeben. Bei festen Werten müssen `RP_ID`,
+  `ORIGIN` und Browser-Adresse zusammenpassen.
 - **Keine Übungsbilder:** Internetzugang des Browsers prüfen. Für den Offline-Download ist
   zusätzlich HTTPS oder `localhost` erforderlich.
 - **KI/Mealie nicht erreichbar:** Die Zieladresse muss aus dem API-Container erreichbar

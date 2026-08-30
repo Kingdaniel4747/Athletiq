@@ -9,6 +9,10 @@ import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 import { glyphOf } from '../lib/glyphs.js'
+import { nutritionOf, totalsForDate } from '../lib/nutrition.js'
+import { normalizeProfile, recoverySummary, weeklyCheckinDue } from '../lib/profile.js'
+import { calisthenicsSummary } from '../lib/calisthenics.js'
+import { recoverySheet, weeklyCheckinSheet } from '../wellnessSheets.jsx'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
@@ -16,6 +20,12 @@ export default function Home() {
   const S = useStore(s => s.S)
   const user = useStore(s => s.user)
   const [weekOffset, setWeekOffset] = useState(0)
+  const nutrition = nutritionOf(S)
+  const todayNutrition = totalsForDate(S, todayISO())
+  const profile = normalizeProfile(S.profile)
+  const recovery = recoverySummary(profile)
+  const checkinDue = weeklyCheckinDue(profile)
+  const nextSkill = calisthenicsSummary(S.calisthenics)[0]
 
   const today = new Date()
   const routine = effectiveRoutine(S, todayISO())
@@ -50,6 +60,32 @@ export default function Home() {
       <div><h1>{user ? t('Hi {0}', user.name) : 'AthletiQ'}</h1><div className="sub">{today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
       <button className="iconbtn" onClick={() => nav('/settings')} aria-label={t('Settings')}><Icon name="gear" /></button>
     </div>
+
+    {!profile.completed && <div className="card baseline-banner">
+      <span><Icon name="sparkles" /></span><div><b>{t('Make AthletiQ personal')}</b><p>{t('Set your goal, body data, equipment and calisthenics skills to connect food and training.')}</p></div><Button size="sm" variant="tinted" onClick={() => nav('/onboarding')}>{t('Set up')}</Button>
+    </div>}
+
+    <div className="today-cockpit">
+      <button className="today-metric nutrition" onClick={() => nav('/nutrition')}>
+        <span className="today-metric-icon"><Icon name="food" /></span>
+        <span><small>{t('Calories')}</small><b>{todayNutrition.calories} <i>/ {nutrition.goals.calories || '–'}</i></b><em>{t('Protein')} {fmtNum(todayNutrition.protein)} / {nutrition.goals.protein || '–'} g</em></span>
+      </button>
+      <button className="today-metric water" onClick={() => nav('/nutrition')}>
+        <span className="today-metric-icon"><Icon name="drop" /></span>
+        <span><small>{t('Water')}</small><b>{todayNutrition.waterMl} <i>/ {nutrition.goals.waterMl || '–'} ml</i></b><em>{nutrition.goals.waterMl ? t('{0}% of goal', Math.min(100, Math.round(todayNutrition.waterMl / nutrition.goals.waterMl * 100))) : t('Set a goal')}</em></span>
+      </button>
+      <button className="today-metric recovery" onClick={recoverySheet}>
+        <span className="today-metric-icon"><Icon name="heart" /></span>
+        <span><small>{t('Readiness')}</small><b>{recovery.days ? t(recovery.status === 'green' ? 'Good signals' : recovery.status === 'yellow' ? 'Adjust if needed' : 'Keep it easy') : t('Check in')}</b><em>{recovery.days ? recovery.sleep + ' h ' + t('sleep') + ' · ' + t('pain') + ' ' + recovery.pain + '/10' : t('Sleep, stress, soreness and pain')}</em></span>
+        <i className={'traffic ' + (recovery.status === 'unknown' ? 'yellow' : recovery.status)} />
+      </button>
+      <button className="today-metric skill" onClick={() => nav('/calisthenics')}>
+        <span className="today-metric-icon"><Icon name="target" /></span>
+        <span><small>{t('Calisthenics')}</small><b>{nextSkill?.goal.name || t('Choose a skill')}</b><em>{nextSkill ? nextSkill.stage[1] : t('Build your progression')}</em></span>
+      </button>
+    </div>
+
+    {checkinDue && profile.completed && <button className="weekly-checkin-banner" onClick={() => weeklyCheckinSheet()}><span><Icon name="sparkles" /></span><div><b>{t('Weekly coach check-in')}</b><small>{t('Add sleep, hunger, energy, stress and pain before the next analysis.')}</small></div><Icon name="chevronRight" /></button>}
 
     <div className="card">
       <div className="row between" style={{ marginBottom: 8 }}>

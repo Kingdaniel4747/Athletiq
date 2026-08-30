@@ -21,6 +21,7 @@ const LABELS = {
   'auth.register.denied': 'Signup refused',
   'auth.logout': 'Signed out',
   'auth.logout.all': 'Signed out everywhere',
+  'account.delete': 'Deleted a profile',
   'admin.user.disable': 'Disabled an account',
   'admin.user.enable': 'Re-enabled an account',
   'admin.invite.create': 'Created an invite code',

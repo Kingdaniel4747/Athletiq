@@ -7,6 +7,7 @@ import { guestAllowed } from '../lib/guest.js'
 import { useState, useRef, useEffect } from 'react'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
+import { moveProgressPhotos } from '../lib/photo-store.js'
 
 function RegisterSheet({ close }) {
   const { setUser, pushState, pullState, loadConfig } = useStore()
@@ -25,6 +26,7 @@ function RegisterSheet({ close }) {
     if (inviteOnly && !code.trim()) { useUI.getState().toast(t('An invite code is required')); return }
     try {
       const u = await passkeyRegister(n, code.trim())
+      await moveProgressPhotos('guest', u.id).catch(() => {})
       setUser(u); close()
       if (hasData(useStore.getState().S)) { await pushState(); useUI.getState().toast(t('Profile created — data from this device moved into it')) }
       else { await pullState(); useUI.getState().toast(t('Welcome, {0}', u.name)) }
@@ -49,6 +51,9 @@ export default function Login() {
   const { setUser, pullState, setGuest } = useStore()
   const config = useStore(s => s.config)
   const canGuest = guestAllowed(config)
+  const browserHasPasskeys = webauthnOK()
+  const serverHasPasskeys = config?.webauthn?.available !== false
+  const passkeysReady = browserHasPasskeys && serverHasPasskeys
   const signIn = async () => {
     try { const u = await passkeyLogin(); setUser(u); await pullState(); useUI.getState().toast(t('Welcome back, {0}', u.name)) }
     catch (e) { if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') useUI.getState().toast(e.message || t('Sign-in failed')) }
@@ -63,16 +68,22 @@ export default function Login() {
     <div className="narrow" style={wrap}>
       {head}
       <div className="muted" style={{ marginBottom: 34 }}>{t('Your workouts. Your weights. Your profile.')}</div>
-      {webauthnOK() ? <>
+      {passkeysReady ? <>
         <Button variant="primary" icon="person" onClick={signIn}>{t('Sign in with passkey')}</Button>
         <div style={{ height: 10 }} />
         <Button icon="sparkles" onClick={() => useUI.getState().openSheet(close => <RegisterSheet close={close} />)}>{t('Create new profile')}</Button>
         {canGuest && <div style={{ height: 10 }} />}
-      </> : <div className="card small muted" style={{ textAlign: 'left' }}>{canGuest
-        ? t("This browser doesn't support passkeys — you can still use AthletiQ locally on this device.")
-        // Without passkeys and without the guest entrance there is no way in from this browser,
-        // so say that plainly instead of offering a local profile that cannot be created.
-        : t("This browser doesn't support passkeys, and this instance requires an account. Try a browser or device with passkey support.")}</div>}
+      </> : <div className="card small muted" style={{ textAlign: 'left' }}>
+        {!browserHasPasskeys
+          ? (canGuest
+              ? t("This browser doesn't support passkeys — you can still use AthletiQ locally on this device.")
+              // Without passkeys and without the guest entrance there is no way in from this browser,
+              // so say that plainly instead of offering a local profile that cannot be created.
+              : t("This browser doesn't support passkeys, and this instance requires an account. Try a browser or device with passkey support."))
+          : config?.webauthn?.secure === false
+            ? t('Passkeys need HTTPS outside localhost. Open AthletiQ through your HTTPS domain; the current address is {0}.', config.webauthn.origin || window.location.origin)
+            : t('Passkey setup does not match this address. Check the public domain or reverse-proxy headers. Details: {0}', config?.webauthn?.error || 'configuration error')}
+      </div>}
       {canGuest && <Button variant="ghost" className="dim" onClick={() => setGuest(true)}>{t('Continue without account')}</Button>}
       <div className="dim small" style={{ marginTop: 26, lineHeight: 1.5 }}>{t('Passkeys use {0} — no passwords.', BIO)}<br />{t('Each profile keeps its own plan, workouts & body weight.')}</div>
     </div>

@@ -11,12 +11,13 @@ import { t, LANGS, INSTR_LANGS } from '../lib/i18n.js'
 import { loadStarterPlan, confirmSheet, importFromApp } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui.jsx'
+import { deleteProgressPhotos, moveProgressPhotos } from '../lib/photo-store.js'
 
 export default function Settings() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
   const user = useStore(s => s.user)
-  const { update, replaceState, setUser, pullState, pushState, signOut, signOutAll } = useStore()
+  const { update, replaceState, setUser, setGuest, pullState, pushState, signOut, signOutAll } = useStore()
   const toast = useUI(s => s.toast)
   const fileRef = useRef(null)
   const importRef = useRef(null)
@@ -58,6 +59,12 @@ export default function Settings() {
       catch (e) { toast(t('Could not sign out everywhere — you are still signed in.')) }
     },
   })
+  const deleteAccount = () => useUI.getState().openSheet(close => <DeleteAccountForm name={user.name} close={close} onDelete={async () => {
+    await api('/api/account', { method: 'DELETE', body: JSON.stringify({ confirm: user.name }) })
+    await deleteProgressPhotos(user.id).catch(() => {})
+    setUser(null); setGuest(false); replaceState(JSON.parse(JSON.stringify(DEF)), false); close(); nav('/home')
+    toast(t('Profile permanently deleted'))
+  }} />)
 
   return <div className="narrow">
     <div className="hdr">
@@ -72,6 +79,7 @@ export default function Settings() {
         {user.admin && <Row icon="wrench" iconTint="var(--indigo)" title={t('Admin dashboard')} accessory="chevron" onClick={() => nav('/admin')} />}
         <Row icon="signOut" iconTint="var(--red)" title={t('Sign out')} danger onClick={() => confirmSheet({ title: t('Sign out?'), message: t('Your data is synced to your profile first, then cleared from this device.'), confirmText: t('Sign out'), danger: true, onConfirm: () => { signOut(); nav('/home') } })} />
         <Row icon="shield" iconTint="var(--red)" title={t('Sign out everywhere')} subtitle={t('Ends this profile’s sessions on all your devices.')} danger onClick={signOutEverywhere} />
+        <Row icon="trash" iconTint="var(--red)" title={t('Delete profile permanently')} subtitle={t('Deletes server data and passkeys after name confirmation. Export a backup first.')} danger onClick={deleteAccount} />
       </> : webauthnOK() ? <>
         <Row icon="sparkles" iconTint="var(--acc)" title={t('Create passkey profile')} subtitle={t('Keeps your data safe and separate per person.')} accessory="chevron" onClick={registerHere} />
         <Row icon="person" iconTint="var(--blue)" title={t('Sign in with passkey')} accessory="chevron" onClick={signInHere} />
@@ -80,6 +88,12 @@ export default function Settings() {
       )}
     </Section>
     {!user && <p className="sect-f" style={{ marginTop: -18, marginBottom: 22 }}>{t('Guest mode — data lives only in this browser.')}</p>}
+
+    <Section title={t('Coach & profile')}>
+      <Row icon="person" iconTint="var(--orange)" title={t('Personal baseline')} subtitle={t('Goal, body data, activity, equipment, diet and safety')} accessory="chevron" onClick={() => nav('/onboarding')} />
+      <Row icon="target" iconTint="var(--purple)" title={t('Calisthenics progressions')} subtitle={t('Skills, assistance, lever, form and pain')} accessory="chevron" onClick={() => nav('/calisthenics')} />
+      <Row icon="food" iconTint="var(--orange)" title={t('Nutrition & coach')} subtitle={t('Calories, macros, water and weekly analysis')} accessory="chevron" onClick={() => nav('/nutrition')} />
+    </Section>
 
     {/* ---------- general ---------- */}
     <Section title={t('General')} footer={t('Note: switching units only changes the label — logged numbers are not converted.')}>
@@ -182,6 +196,23 @@ export default function Settings() {
   </div>
 }
 
+function DeleteAccountForm({ name, close, onDelete }) {
+  const [confirmName, setConfirmName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const toast = useUI(state => state.toast)
+  const go = async () => {
+    setBusy(true)
+    try { await onDelete() }
+    catch (error) { toast(error.message || t('Profile could not be deleted')); setBusy(false) }
+  }
+  return <>
+    <h3>{t('Delete profile permanently?')}</h3>
+    <p className="small muted">{t('This removes the synced state, account and registered passkeys from this AthletiQ server. This cannot be undone.')}</p>
+    <label className="nutrition-field"><span>{t('Type {0} to confirm', name)}</span><TextField value={confirmName} onChange={event => setConfirmName(event.target.value)} /></label>
+    <div className="row"><Button onClick={close}>{t('Cancel')}</Button><Button variant="danger" disabled={busy || confirmName !== name} onClick={go}>{busy ? t('Deleting…') : t('Delete permanently')}</Button></div>
+  </>
+}
+
 // The whole point is that the two scales are one judgement counted from opposite ends, and a
 // paragraph is a bad way to say that — the conversion table shows it in one look. Reading down
 // a column is the answer to "what do I put here", so the numbers get their own aligned columns.
@@ -273,6 +304,21 @@ function PushCard({ S, update, toast }) {
             onChange={e => update(s => { s.reminder = { ...(s.reminder || DEF.reminder), time: e.target.value, tz: localTZ() } })} />
         </Row>
       )}
+      {on && (
+        <Row icon="sparkles" iconTint="var(--orange)" title={t('Weekly coach reminder')} subtitle={t('Only when your check-in is due.')}>
+          <Switch checked={!!S.coachReminder?.on} onChange={() => update(s => { s.coachReminder = { ...(s.coachReminder || DEF.coachReminder), on: !s.coachReminder?.on, tz: localTZ() } })} />
+        </Row>
+      )}
+      {on && S.coachReminder?.on && <>
+        <SelectRow icon="calendar" iconTint="var(--orange)" title={t('Check-in day')}
+          value={S.coachReminder?.weekday ?? DEF.coachReminder.weekday}
+          onChange={value => update(s => { s.coachReminder = { ...(s.coachReminder || DEF.coachReminder), weekday: Number(value), tz: localTZ() } })}
+          options={['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day, value) => ({ value, label: t(day) }))} />
+        <Row icon="clock" iconTint="var(--purple)" title={t('Coach reminder time')}>
+          <input type="time" className="timef" value={S.coachReminder?.time || DEF.coachReminder.time}
+            onChange={event => update(s => { s.coachReminder = { ...(s.coachReminder || DEF.coachReminder), time: event.target.value, tz: localTZ() } })} />
+        </Row>
+      </>}
     </Section>
     {on && <div style={{ marginTop: -12, marginBottom: 22 }}><Button size="sm" icon="bell" onClick={test}>{t('Send test notification')}</Button></div>}
   </>
@@ -291,7 +337,7 @@ function RegisterInline({ close, setUser, pushState, pullState, toast }) {
     if (!n) { toast(t('Enter a name')); return }
     if (inviteOnly && !code.trim()) { toast(t('An invite code is required')); return }
     try {
-      const u = await passkeyRegister(n, code.trim()); setUser(u); close()
+      const u = await passkeyRegister(n, code.trim()); await moveProgressPhotos('guest', u.id).catch(() => {}); setUser(u); close()
       if (hasData(useStore.getState().S)) { await pushState(); toast(t('Profile created — data moved into it')) }
       else { await pullState(); toast(t('Welcome, {0}', u.name)) }
     } catch (e) { if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') toast(e.message || t('Registration failed')) }

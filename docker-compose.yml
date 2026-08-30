@@ -8,8 +8,8 @@ services:
     volumes:
       - ./.athletiq:/data
     environment:
-      RP_ID: "${RP_ID:-localhost}"
-      ORIGIN: "${ORIGIN:-http://localhost:8080}"
+      RP_ID: "${RP_ID:-auto}"
+      ORIGIN: "${ORIGIN:-auto}"
       RP_NAME: "${RP_NAME:-AthletiQ}"
       ALLOW_GUEST: "${ALLOW_GUEST:-1}"
       INVITE_ONLY: "${INVITE_ONLY:-0}"

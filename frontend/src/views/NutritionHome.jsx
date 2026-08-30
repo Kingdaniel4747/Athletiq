@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore.js'
 import { dateLocale, t } from '../lib/i18n.js'
 import { fmtNum, todayISO } from '../lib/format.js'
 import { nutritionOf, totalsForDate, weightTrend } from '../lib/nutrition.js'
-import { addWater, deleteNutritionEntry, foodEntrySheet, nutritionGoalSheet } from '../nutritionSheets.jsx'
+import { addWater, copyNutritionEntries, deleteNutritionEntry, foodEntrySheet, nutritionGoalSheet, quickLogFood, saveMealTemplate } from '../nutritionSheets.jsx'
 import { Button } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
 
@@ -23,12 +23,18 @@ export default function NutritionHome() {
   const S = useStore(state => state.S)
   const nutrition = nutritionOf(S)
   const date = todayISO()
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
+  const yesterdayISO = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
   const totals = totalsForDate(S, date)
   const goals = nutrition.goals
   const caloriePct = goals.calories > 0 ? Math.min(100, Math.round(totals.calories / goals.calories * 100)) : 0
   const remaining = goals.calories > 0 ? Math.round(goals.calories - totals.calories) : null
   const waterPct = goals.waterMl > 0 ? Math.min(100, totals.waterMl / goals.waterMl * 100) : 0
   const weight = weightTrend(S.bodyweight, 28)
+  const quickFoods = nutrition.foods.filter(food => food.favorite).sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0)).slice(0, 6)
+  const proteinPerMainMeal = ['breakfast', 'lunch', 'dinner'].map(meal => totals.entries.filter(entry => entry.meal === meal).reduce((sum, entry) => sum + (Number(entry.protein) || 0), 0))
+  const proteinMealFloor = goals.protein > 0 ? goals.protein / 4 : 25
+  const proteinMealsCovered = proteinPerMainMeal.filter(value => value >= proteinMealFloor).length
 
   return <div className="narrow nutrition-page">
     <div className="hdr">
@@ -51,6 +57,7 @@ export default function NutritionHome() {
     <div className="card macro-card">
       <div className="row between"><h2>{t('Macros')}</h2><span className="small muted">{t('Today')}</span></div>
       <ProgressBar value={totals.protein} target={goals.protein} color="var(--orange)" label={t('Protein')} />
+      {goals.protein > 0 && <div className="protein-guidance"><span>{goals.proteinLow && goals.proteinHigh ? t('Personal range {0}–{1} g', goals.proteinLow, goals.proteinHigh) : t('Daily target {0} g', goals.protein)}</span><span>{t('{0} of 3 main meals have a substantial protein serving', proteinMealsCovered)}</span></div>}
       <ProgressBar value={totals.carbs} target={goals.carbs} color="var(--yellow)" label={t('Carbs')} />
       <ProgressBar value={totals.fat} target={goals.fat} color="var(--pink)" label={t('Fat')} />
       <ProgressBar value={totals.fiber} target={goals.fiber} color="var(--teal)" label={t('Fiber')} />
@@ -61,6 +68,8 @@ export default function NutritionHome() {
       <button onClick={() => nav('/nutrition/foods?mealie=1')}><span><Icon name="book" /></span><b>Mealie</b><small>{t('Recipes')}</small></button>
       <button onClick={() => foodEntrySheet()}><span><Icon name="plus" /></span><b>{t('Manual')}</b><small>{t('Food')}</small></button>
     </div>
+
+    {!!quickFoods.length && <div className="card quick-food-card"><div className="row between"><h2>{t('Favorites')}</h2><Button size="sm" onClick={() => nav('/nutrition/foods')}>{t('Manage')}</Button></div><div className="quick-foods">{quickFoods.map(food => <button key={food.id} onClick={() => quickLogFood(food)}><Icon name="starFill" /><span>{food.name}</span><small>{t('Tap to log')}</small></button>)}</div></div>}
 
     <div className="card water-card">
       <div className="water-bottle" aria-label={t('{0} ml water', totals.waterMl)}>
@@ -75,7 +84,7 @@ export default function NutritionHome() {
       </div>
     </div>
 
-    <div className="row between diary-heading"><h2>{t('Food diary')}</h2><Button size="sm" icon="plus" onClick={() => foodEntrySheet(null, date)}>{t('Add')}</Button></div>
+    <div className="row between diary-heading"><h2>{t('Food diary')}</h2><div className="row"><Button size="sm" icon="copy" onClick={() => copyNutritionEntries(yesterdayISO, date)}>{t('Yesterday')}</Button><Button size="sm" icon="plus" onClick={() => foodEntrySheet(null, date)}>{t('Add')}</Button></div></div>
     {MEALS.map(meal => {
       const entries = totals.entries.filter(entry => entry.meal === meal)
       const calories = entries.reduce((sum, entry) => sum + (Number(entry.calories) || 0), 0)
@@ -93,10 +102,11 @@ export default function NutritionHome() {
               fat: entry.fat / entry.grams * 100,
               fiber: entry.fiber / entry.grams * 100,
             } : {},
-          }, date)}><b>{entry.name}</b><span>{fmtNum(entry.quantity)} {entry.unit === 'g' ? 'g' : t(entry.unit === 'slice' ? 'Slice' : entry.unit === 'piece' ? 'Piece' : 'Portion')} · P {fmtNum(entry.protein)} g</span></button>
+          }, date, meal)}><b>{entry.name}</b><span>{fmtNum(entry.quantity)} {['g', 'ml'].includes(entry.unit) ? entry.unit : t(entry.unit === 'slice' ? 'Slice' : entry.unit === 'piece' ? 'Piece' : 'Portion')} · P {fmtNum(entry.protein)} g</span></button>
           <b>{Math.round(entry.calories)} kcal</b>
           <button className="iconbtn food-delete" onClick={() => deleteNutritionEntry(entry.id)} aria-label={t('Delete')}><Icon name="xmark" /></button>
-        </div>) : <button className="empty-meal" onClick={() => foodEntrySheet(null, date)}><Icon name="plus" />{t('Add food')}</button>}
+        </div>) : <button className="empty-meal" onClick={() => foodEntrySheet(null, date, meal)}><Icon name="plus" />{t('Add food')}</button>}
+        <div className="meal-quick-actions"><button onClick={() => copyNutritionEntries(yesterdayISO, date, meal)}><Icon name="copy" />{t('Copy yesterday')}</button>{entries.length > 0 && <button onClick={() => saveMealTemplate(date, meal)}><Icon name="bookmark" />{t('Save template')}</button>}</div>
       </div>
     })}
   </div>

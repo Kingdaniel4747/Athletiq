@@ -245,6 +245,8 @@ export default {
   'Create new profile': 'Neues Profil erstellen',
   "This browser doesn't support passkeys — you can still use AthletiQ locally on this device.": 'Dieser Browser unterstützt keine Passkeys — du kannst AthletiQ trotzdem lokal auf diesem Gerät nutzen.',
   "This browser doesn't support passkeys, and this instance requires an account. Try a browser or device with passkey support.": 'Dieser Browser unterstützt keine Passkeys, und dieser Server verlangt ein Konto. Probier einen Browser oder ein Gerät mit Passkey-Unterstützung.',
+  'Passkeys need HTTPS outside localhost. Open AthletiQ through your HTTPS domain; the current address is {0}.': 'Passkeys benötigen außerhalb von localhost HTTPS. Öffne AthletiQ über deine HTTPS-Domain; die aktuelle Adresse ist {0}.',
+  'Passkey setup does not match this address. Check the public domain or reverse-proxy headers. Details: {0}': 'Die Passkey-Einstellung passt nicht zu dieser Adresse. Prüfe die öffentliche Domain oder die Reverse-Proxy-Header. Details: {0}',
   'Continue without account': 'Ohne Konto fortfahren',
   'Passkeys use {0} — no passwords.': 'Passkeys nutzen {0} — keine Passwörter.',
   'Each profile keeps its own plan, workouts & body weight.': 'Jedes Profil hat seinen eigenen Plan, Trainings & Körpergewicht.',

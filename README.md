@@ -25,6 +25,12 @@ sowie den Gewichtstrend. Optional kann ein eigener KI-Endpunkt daraus konkrete
 Vorschläge für Kalorien, Makros und Trainingspläne erzeugen. Änderungen werden erst
 nach deiner Bestätigung übernommen.
 
+Beim ersten Start führt ein vierstufiges Onboarding durch Ziel, Körperdaten,
+Alltagsaktivität, Training, Ausrüstung, Calisthenics-Skills, Ernährung und
+Sicherheitsangaben. Daraus entstehen konservative Startziele. Erst nach mindestens zwei
+konsequent protokollierten Wochen kann AthletiQ aus Kalorien und Gewichtstrend eine
+persönlichere Energie-Hypothese ableiten.
+
 ## Schnellstart mit nur Docker Compose
 
 Du brauchst lediglich Docker mit Compose. Lade die eine Compose-Datei herunter und
@@ -65,6 +71,11 @@ docker compose up -d
 - Progressive-Overload-Auswertung, PRs und geschätztes 1RM
 - Warm-up-Sätze, Supersätze, RIR/RPE, Cardio und zeitbasierte Übungen
 - Körpergewicht, Zielgewicht, Heatmap, Muskelbalance und Ermüdungsansicht
+- Gemeinsames Tagescockpit für Training, Kalorien, Protein, Wasser und Tagesform
+- Calisthenics-Leitern für Pull-up, Push-up, Dip, einbeinige Kniebeuge, Handstand,
+  L-Sit, Front Lever und Planche
+- Calisthenics-Logs mit Variante, Band/Assistenz, Zusatzgewicht, Hebel, Höhe,
+  Bewegungsumfang, Tempo, Haltezeit, Seite, Form, RPE und Schmerz
 - Passkey-Profile, geräteübergreifender Sync und Gastmodus
 - Import von FitNotes, Strong, Hevy und Apple-Health-Exporten
 
@@ -72,12 +83,19 @@ docker compose up -d
 
 - Tagesziele für Kalorien, Protein, Kohlenhydrate und Fett
 - Mahlzeiten und eigene Lebensmittel mit frei wählbarer Portionsmenge
+- Favoriten, Ein-Tipp-Logging, Standardportionen, Mahlzeiten-Vorlagen und Kopieren
+  von Mahlzeiten oder ganzen Tagen
+- Kennzeichnung von roh/gekocht und Etikett-/Datenbank-/Schätzwerten
 - Barcode-Suche über Open Food Facts
 - Rezeptimport aus einer eigenen Mealie-Instanz
 - Wasserziel mit animierter Flasche und schneller Mengenwahl
 - Gewichtstrend und gemeinsame Ampel für Ernährung und Training
+- Körpermaße sowie optionale Fortschrittsfotos, die nur im jeweiligen Browser bleiben
+- Täglicher Erholungs-Check und wöchentlicher Coach-Check-in für Schlaf, Energie,
+  Hunger, Stress, Muskelkater, Schritte, Krankheit und Gelenk-/Sehnenschmerz
 - Regelbasierter Coach, der auch ohne externen KI-Dienst funktioniert
 - Optionaler KI-Coach über einen OpenAI-kompatiblen Chat-Completions-Endpunkt
+- Kleine, bestätigungspflichtige Änderungen mit Verlauf und Rückgängig-Funktion
 
 ## Optionale Konfiguration
 
@@ -93,8 +111,8 @@ Wichtigste Werte:
 
 | Variable | Zweck |
 | --- | --- |
-| `RP_ID` | Exakter Hostname für Passkeys, ohne Protokoll |
-| `ORIGIN` | Öffentliche HTTPS-Adresse der App |
+| `RP_ID` | `auto` oder fester Passkey-Hostname ohne Protokoll |
+| `ORIGIN` | `auto` oder feste öffentliche HTTPS-Adresse |
 | `WEB_PORT` | Veröffentlichter Port, standardmäßig `8080` |
 | `ALLOW_GUEST` | Gastmodus mit `1` erlauben oder mit `0` abschalten |
 | `MEALIE_URL` | Basis-URL deiner Mealie-Instanz |
@@ -113,10 +131,17 @@ Passkeys, Installation als PWA und Push-Nachrichten solltest du außerhalb von
 
 - AthletiQ enthält keine Telemetrie und kein Werbe-Tracking.
 - Profile und Zustände liegen im gemounteten Ordner `./.athletiq`.
+- Das Datenformat trägt eine Schema-Version; alte Profile werden beim Laden um neue
+  Bereiche ergänzt, ohne Trainings- oder Ernährungshistorie zu löschen.
 - Übungsmedien werden auf Wunsch lokal im jeweiligen Browser gespeichert; auf dem Server
   gibt es dafür weder Volume noch Medienordner.
+- Fortschrittsfotos liegen ausschließlich in IndexedDB dieses Browsers und sind deshalb
+  bewusst nicht Teil von Sync, Coach-Daten oder JSON-Backup.
 - Mealie- und KI-Schlüssel werden nur vom Backend verwendet und nicht an den Browser
   ausgeliefert.
+- Anmeldung, Barcode-Abfragen und Coach-Endpunkt besitzen einfache Missbrauchslimits.
+- Profile können in den Einstellungen exportiert und nach Eingabe des Profilnamens
+  einschließlich Serverzustand und registrierter Passkeys gelöscht werden.
 - Vor Updates sollte `./.athletiq` gesichert werden.
 
 Der Coach ist ein Planungswerkzeug und kein Ersatz für medizinische Beratung. Bei

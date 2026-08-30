@@ -23,6 +23,7 @@ const MEALS = [
 
 const UNITS = [
   { value: 'g', label: 'g' },
+  { value: 'ml', label: 'ml' },
   { value: 'slice', label: 'Slice' },
   { value: 'piece', label: 'Piece' },
   { value: 'portion', label: 'Portion' },
@@ -36,17 +37,19 @@ const cleanPer100 = food => ({
   fiber: Math.max(0, Number(food?.per100?.fiber) || 0),
 })
 
-function FoodEntryForm({ food, date, close }) {
+function FoodEntryForm({ food, date, defaultMeal = 'snack', close }) {
   const initialUnit = food?.unit || (food?.serving?.grams ? 'portion' : 'g')
   const [name, setName] = useState(food?.name || '')
-  const [meal, setMeal] = useState('snack')
+  const [meal, setMeal] = useState(defaultMeal)
   const [unit, setUnit] = useState(initialUnit)
-  const [quantity, setQuantity] = useState(1)
+  const [quantity, setQuantity] = useState(Number(food?.defaultQuantity) || (initialUnit === 'g' || initialUnit === 'ml' ? 100 : 1))
   const [gramsPerUnit, setGramsPerUnit] = useState(
     initialUnit === 'g' ? 1 : Number(food?.gramsPerUnit || food?.serving?.grams) || 100,
   )
   const [per100, setPer100] = useState(cleanPer100(food))
-  const grams = unit === 'g' ? quantity : quantity * gramsPerUnit
+  const [dataBasis, setDataBasis] = useState(food?.dataBasis || 'as-eaten')
+  const [dataQuality, setDataQuality] = useState(food?.dataQuality || (food?.source === 'openfoodfacts' ? 'label' : 'estimated'))
+  const grams = unit === 'g' || unit === 'ml' ? quantity : quantity * gramsPerUnit
   const totals = useMemo(() => macrosFor({ per100 }, grams), [per100, grams])
 
   const save = () => {
@@ -63,11 +66,13 @@ function FoodEntryForm({ food, date, close }) {
       brand: food?.brand || '',
       quantity,
       unit,
-      gramsPerUnit: unit === 'g' ? 1 : gramsPerUnit,
+      gramsPerUnit: ['g', 'ml'].includes(unit) ? 1 : gramsPerUnit,
       grams: Math.round(grams * 10) / 10,
       ...totals,
       barcode: food?.barcode || null,
       source: food?.source || 'manual',
+      dataBasis,
+      dataQuality,
       createdAt: Date.now(),
     }
     update(nutrition => {
@@ -80,7 +85,10 @@ function FoodEntryForm({ food, date, close }) {
         source: food?.source || 'manual',
         per100,
         unit,
-        gramsPerUnit: unit === 'g' ? 1 : gramsPerUnit,
+        defaultQuantity: quantity,
+        gramsPerUnit: ['g', 'ml'].includes(unit) ? 1 : gramsPerUnit,
+        dataBasis,
+        dataQuality,
         serving: food?.serving || null,
         lastUsed: Date.now(),
       }
@@ -110,8 +118,10 @@ function FoodEntryForm({ food, date, close }) {
     <div className="nutrition-field"><span>{t('Unit')}</span><Segmented value={unit} onChange={setUnit} options={UNITS.map(item => ({ ...item, label: t(item.label) }))} /></div>
     <div className="nutrition-form-grid">
       <label className="nutrition-field"><span>{t('Amount')}</span><NumberField value={quantity} onChange={setQuantity} /></label>
-      {unit !== 'g' && <label className="nutrition-field"><span>{t('Grams per {0}', t(UNITS.find(item => item.value === unit)?.label || unit).toLowerCase())}</span><NumberField value={gramsPerUnit} onChange={setGramsPerUnit} /></label>}
+      {!['g', 'ml'].includes(unit) && <label className="nutrition-field"><span>{t('Grams per {0}', t(UNITS.find(item => item.value === unit)?.label || unit).toLowerCase())}</span><NumberField value={gramsPerUnit} onChange={setGramsPerUnit} /></label>}
     </div>
+    <div className="nutrition-field"><span>{t('Food state')}</span><Segmented value={dataBasis} onChange={setDataBasis} options={[{ value: 'raw', label: t('Raw') }, { value: 'cooked', label: t('Cooked') }, { value: 'as-eaten', label: t('As eaten') }]} /></div>
+    <div className="nutrition-field"><span>{t('Data quality')}</span><Segmented value={dataQuality} onChange={setDataQuality} options={[{ value: 'label', label: t('Label') }, { value: 'database', label: t('Database') }, { value: 'estimated', label: t('Estimated') }]} /></div>
     <div className="small muted" style={{ margin: '2px 0 12px' }}>{t('Nutrition values per 100 g')}</div>
     <div className="nutrition-form-grid macros">
       <MacroInput field="calories" label={t('Calories')} unitLabel="kcal" />
@@ -128,8 +138,67 @@ function FoodEntryForm({ food, date, close }) {
   </>
 }
 
-export function foodEntrySheet(food = null, date = todayISO()) {
-  return ui().openSheet(close => <FoodEntryForm food={food} date={date} close={close} />)
+export function foodEntrySheet(food = null, date = todayISO(), defaultMeal = 'snack') {
+  return ui().openSheet(close => <FoodEntryForm food={food} date={date} defaultMeal={defaultMeal} close={close} />)
+}
+
+export function quickLogFood(food, meal = 'snack', date = todayISO()) {
+  if (!food) return
+  const unit = food.unit || (food.serving?.grams ? 'portion' : 'g')
+  const quantity = Number(food.defaultQuantity) || (unit === 'g' || unit === 'ml' ? 100 : 1)
+  const gramsPerUnit = unit === 'g' || unit === 'ml' ? 1 : Number(food.gramsPerUnit || food.serving?.grams) || 100
+  const grams = quantity * gramsPerUnit
+  const totals = macrosFor(food, grams)
+  update(nutrition => {
+    nutrition.entries.push({
+      id: uid(), date, meal, foodId: food.id, name: food.name, brand: food.brand || '',
+      quantity, unit, gramsPerUnit, grams, ...totals, barcode: food.barcode || null,
+      source: food.source || 'manual', dataBasis: food.dataBasis || 'as-eaten',
+      dataQuality: food.dataQuality || 'estimated', createdAt: Date.now(),
+    })
+    const saved = nutrition.foods.find(item => item.id === food.id)
+    if (saved) saved.lastUsed = Date.now()
+  })
+  toast(t('{0} logged', food.name))
+}
+
+export function toggleFavoriteFood(id) {
+  update(nutrition => {
+    const food = nutrition.foods.find(item => item.id === id)
+    if (food) food.favorite = !food.favorite
+  })
+}
+
+export function copyNutritionEntries(sourceDate, targetDate = todayISO(), meal = null) {
+  let copied = 0
+  update(nutrition => {
+    const rows = nutrition.entries.filter(entry => entry.date === sourceDate && (!meal || entry.meal === meal))
+    for (const row of rows) nutrition.entries.push({ ...row, id: uid(), date: targetDate, createdAt: Date.now() + copied++ })
+  })
+  toast(copied ? t('{0} entries copied', copied) : t('Nothing to copy'))
+}
+
+export function saveMealTemplate(date, meal) {
+  const nutrition = normalizeNutrition(useStore.getState().S.nutrition)
+  const rows = nutrition.entries.filter(entry => entry.date === date && entry.meal === meal)
+  if (!rows.length) return toast(t('Nothing to save'))
+  update(next => {
+    next.mealTemplates.push({
+      id: uid(), name: `${t(MEALS.find(item => item.value === meal)?.label || meal)} · ${new Date().toLocaleDateString()}`,
+      meal, createdAt: Date.now(), entries: rows.map(({ id, date: ignoredDate, createdAt, ...entry }) => entry),
+    })
+    next.mealTemplates = next.mealTemplates.slice(-30)
+  })
+  toast(t('Meal template saved'))
+}
+
+export function applyMealTemplate(templateId, date = todayISO()) {
+  let added = 0
+  update(nutrition => {
+    const template = nutrition.mealTemplates.find(item => item.id === templateId)
+    for (const entry of template?.entries || []) nutrition.entries.push({ ...entry, id: uid(), date, createdAt: Date.now() + added++ })
+  })
+  toast(added ? t('{0} entries logged', added) : t('Template is empty'))
 }
 
 function GoalForm({ close }) {
@@ -171,4 +240,3 @@ export function addWater(ml, date = todayISO()) {
 export function deleteNutritionEntry(id) {
   update(nutrition => { nutrition.entries = nutrition.entries.filter(entry => entry.id !== id) })
 }
-

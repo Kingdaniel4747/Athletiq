@@ -5,7 +5,7 @@ import { useUI } from '../store/useUI.js'
 import { getMealieRecipe, lookupProduct, searchMealie } from '../lib/nutritionApi.js'
 import { nutritionOf } from '../lib/nutrition.js'
 import { t } from '../lib/i18n.js'
-import { foodEntrySheet } from '../nutritionSheets.jsx'
+import { applyMealTemplate, foodEntrySheet, quickLogFood, toggleFavoriteFood } from '../nutritionSheets.jsx'
 import { Button, SearchField, TextField } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
 
@@ -73,6 +73,8 @@ export default function NutritionFoods() {
   const foods = useMemo(() => nutritionOf(S).foods
     .filter(food => !query || `${food.name} ${food.brand || ''}`.toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0)), [S, query])
+  const nutrition = nutritionOf(S)
+  const favorites = foods.filter(food => food.favorite)
 
   const findProduct = async code => {
     setBusy(true)
@@ -109,6 +111,12 @@ export default function NutritionFoods() {
   return <div className="narrow nutrition-page">
     <div className="hdr"><div><h1>{t('Food')}</h1><div className="sub">{t('Scan, search or use a Mealie recipe')}</div></div><button className="iconbtn" onClick={() => foodEntrySheet()}><Icon name="plus" /></button></div>
 
+    {(favorites.length > 0 || nutrition.mealTemplates.length > 0) && <div className="card quick-food-card">
+      <div className="row between"><h2>{t('Quick log')}</h2><span className="small muted">{t('One tap')}</span></div>
+      {!!favorites.length && <div className="quick-foods">{favorites.slice(0, 8).map(food => <button key={food.id} onClick={() => quickLogFood(food)}><Icon name="starFill" /><span>{food.name}</span><small>{food.defaultQuantity || (food.unit === 'g' ? 100 : 1)} {food.unit || 'g'}</small></button>)}</div>}
+      {!!nutrition.mealTemplates.length && <div className="template-list">{nutrition.mealTemplates.slice(-5).reverse().map(template => <button key={template.id} onClick={() => applyMealTemplate(template.id)}><Icon name="copy" /><span><b>{template.name}</b><small>{template.entries.length} {t('items')}</small></span><Icon name="plus" /></button>)}</div>}
+    </div>}
+
     {scanning && <Scanner onCode={code => { setBarcode(code); findProduct(code) }} onClose={() => setScanning(false)} />}
 
     <div className="card barcode-card">
@@ -125,8 +133,11 @@ export default function NutritionFoods() {
     <div className="row between diary-heading"><h2>{t('Saved foods')}</h2><span className="small muted">{foods.length}</span></div>
     <SearchField value={query} onChange={event => setQuery(event.target.value)} onClear={() => setQuery('')} placeholder={t('Search saved foods')} />
     <div className="card food-library">
-      {foods.length ? foods.map(food => <button key={food.id} onClick={() => foodEntrySheet(food)}><span className="food-dot"><Icon name="food" /></span><span><b>{food.name}</b><small>{food.brand || `${food.per100?.calories || 0} kcal / 100 g`}</small></span><Icon name="plus" /></button>) : <div className="empty-state"><Icon name="food" /><b>{t('No saved foods yet')}</b><span>{t('Scan a product or create one manually.')}</span></div>}
+      {foods.length ? foods.map(food => <div className="saved-food-row" key={food.id}>
+        <button className="saved-food-main" onClick={() => foodEntrySheet(food)}><span className="food-dot"><Icon name="food" /></span><span><b>{food.name}</b><small>{food.brand || `${food.per100?.calories || 0} kcal / 100 g`} · {t(food.dataQuality === 'label' ? 'Label' : food.dataQuality === 'database' ? 'Database' : 'Estimated')}</small></span></button>
+        <button className="iconbtn favorite-food" onClick={() => toggleFavoriteFood(food.id)} aria-label={t('Favorite')}><Icon name={food.favorite ? 'starFill' : 'star'} /></button>
+        <button className="iconbtn" onClick={() => quickLogFood(food)} aria-label={t('Quick log')}><Icon name="plus" /></button>
+      </div>) : <div className="empty-state"><Icon name="food" /><b>{t('No saved foods yet')}</b><span>{t('Scan a product or create one manually.')}</span></div>}
     </div>
   </div>
 }
-

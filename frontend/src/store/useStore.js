@@ -4,25 +4,35 @@ import { localTZ } from '../lib/format.js'
 import { registerCustom } from '../lib/exercises.js'
 import { guestAllowed } from '../lib/guest.js'
 import { normalizeNutrition, nutritionDefaults } from '../lib/nutrition.js'
+import { normalizeProfile, profileDefaults } from '../lib/profile.js'
+import { calisthenicsDefaults, normalizeCalisthenics } from '../lib/calisthenics.js'
 
 const KEY = 'athletiq_state_v1'
 export const DEF = {
+  schemaVersion: 2,
   unit: 'kg', restSec: 90, sound: true, keepAwake: true, lang: 'en',
   theme: 'dark', accent: 'lime', body: 'male', targetW: null,
   bodyweight: [], routines: [], week: {}, dayPlan: {},
   exWeights: {}, workouts: [], active: null, customEx: [], gifSize: 'full',
   nutrition: nutritionDefaults(),
+  profile: profileDefaults(),
+  calisthenics: calisthenicsDefaults(),
   // effort: which per-set effort scale is logged — 'none' | 'rir' | 'rpe'. null, not 'none', so
   // that a profile which never chose (loaded state is overlaid on DEF, on every path: local,
   // server pull, backup import) still falls back to the `showRir` boolean this replaced and
   // keeps the column it had. See effortOf.
-  reminder: { on: false, time: '08:00', tz: null }, effort: null
+  reminder: { on: false, time: '08:00', tz: null },
+  coachReminder: { on: false, weekday: 0, time: '18:00', tz: null },
+  effort: null
 }
 const clone = o => JSON.parse(JSON.stringify(o))
 
 function withDefaults(value) {
   const state = Object.assign(clone(DEF), value || {})
   state.nutrition = normalizeNutrition(state.nutrition)
+  state.profile = normalizeProfile(state.profile)
+  state.calisthenics = normalizeCalisthenics(state.calisthenics)
+  state.schemaVersion = 2
   return state
 }
 
@@ -35,7 +45,8 @@ function loadState() {
 }
 
 const hasData = st => !!((st.workouts || []).length || (st.routines || []).length || (st.bodyweight || []).length
-  || (st.nutrition?.entries || []).length || (st.nutrition?.water || []).length)
+  || (st.nutrition?.entries || []).length || (st.nutrition?.water || []).length
+  || (st.calisthenics?.entries || []).length || st.profile?.completed)
 
 export const useStore = create((set, get) => {
   let pushTm = null
@@ -154,6 +165,9 @@ export const useStore = create((set, get) => {
         const tz = localTZ()
         if (get().S.reminder?.on && get().S.reminder.tz !== tz) {
           get().update(s => { s.reminder = { ...s.reminder, tz } })
+        }
+        if (get().S.coachReminder?.on && get().S.coachReminder.tz !== tz) {
+          get().update(s => { s.coachReminder = { ...s.coachReminder, tz } })
         }
       } catch (e) {
         if (e.status === 401) get().setUser(null)

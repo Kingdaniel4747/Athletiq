@@ -24,11 +24,15 @@ export const nutritionDefaults = () => ({
     fiber: null,
     waterMl: null,
     rateKgWeek: 0.25,
+    proteinLow: null,
+    proteinHigh: null,
   },
   entries: [],
   foods: [],
   water: [],
   coachHistory: [],
+  mealTemplates: [],
+  goalHistory: [],
 })
 
 export function normalizeNutrition(value) {
@@ -42,6 +46,8 @@ export function normalizeNutrition(value) {
     foods: Array.isArray(n.foods) ? n.foods : [],
     water: Array.isArray(n.water) ? n.water : [],
     coachHistory: Array.isArray(n.coachHistory) ? n.coachHistory : [],
+    mealTemplates: Array.isArray(n.mealTemplates) ? n.mealTemplates : [],
+    goalHistory: Array.isArray(n.goalHistory) ? n.goalHistory : [],
   }
 }
 
@@ -195,6 +201,27 @@ export function coachSnapshot(state, now = new Date()) {
   }
   const weight = weightTrend(state?.bodyweight || [], 28, now)
   const overload = overloadTrend(state?.workouts || [], now)
+  const recoveryRows = (state?.profile?.recovery || []).filter(row => {
+    const at = Number(row.createdAt) || new Date(`${row.date}T12:00:00`).getTime()
+    return at >= new Date(now).getTime() - 7 * DAY
+  })
+  const maxPain = Math.max(0, ...recoveryRows.map(row => Number(row.pain) || 0))
+  const lowEnergyDays = recoveryRows.filter(row => (Number(row.energy) || 0) > 0 && Number(row.energy) <= 2).length
+  const trainingMix = { strength: 0, hypertrophy: 0, skill: 0, prehab: 0 }
+  const mixCutoff = new Date(now).getTime() - 28 * DAY
+  for (const workout of (state?.workouts || []).filter(row => workoutAt(row) >= mixCutoff)) {
+    for (const entry of workout.entries || []) {
+      for (const set of entry.sets || []) {
+        if (!set.done) continue
+        const intent = entry.intent === 'prehab' ? 'prehab' : Number(set.sec) > 0 ? 'skill' : Number(set.r) <= 5 ? 'strength' : 'hypertrophy'
+        trainingMix[intent]++
+      }
+    }
+  }
+  for (const entry of (state?.calisthenics?.entries || []).filter(row => (Number(row.createdAt) || 0) >= mixCutoff)) {
+    const intent = ['strength', 'hypertrophy', 'skill', 'prehab'].includes(entry.intent) ? entry.intent : 'skill'
+    trainingMix[intent] += Math.max(1, Number(entry.sets) || 1)
+  }
   const plannedPerWeek = Object.values(state?.week || {}).filter(Boolean).length
   const expected = plannedPerWeek * 2
   const consistency = expected > 0
@@ -230,6 +257,11 @@ export function coachSnapshot(state, now = new Date()) {
       status: overload.compared < 2 ? 'yellow' : overload.improved > overload.regressed ? 'green' : overload.regressed > overload.improved ? 'red' : 'yellow',
       value: overload,
     },
+    {
+      key: 'recovery',
+      status: maxPain >= 5 || lowEnergyDays >= 3 ? 'red' : maxPain >= 3 || lowEnergyDays ? 'yellow' : recoveryRows.length ? 'green' : 'yellow',
+      value: { days: recoveryRows.length, maxPain, lowEnergyDays },
+    },
   ]
 
   const mode = nutrition.goals.mode
@@ -245,10 +277,21 @@ export function coachSnapshot(state, now = new Date()) {
   return {
     generatedAt: new Date(now).toISOString(),
     goal: { ...nutrition.goals },
+    phase: {
+      targetWeightKg: Number(state?.profile?.targetWeightKg) || null,
+      currentWeightKg: weight.latest == null ? null : round(weight.latest * (state?.unit === 'lb' ? 0.45359237 : 1), 1),
+    },
     loggedDays,
     averages: avg,
     weight,
     training: { ...overload, plannedPerWeek, consistency: round(consistency, 2) },
+    trainingMix,
+    recovery: { days: recoveryRows.length, maxPain, lowEnergyDays },
+    checkin: (state?.profile?.checkins || []).at(-1) || null,
+    calisthenics: {
+      sessions: (state?.calisthenics?.entries || []).filter(entry => (Number(entry.createdAt) || 0) >= new Date(now).getTime() - 28 * DAY).length,
+      pain: Math.max(0, ...(state?.calisthenics?.entries || []).slice(-20).map(entry => Number(entry.pain) || 0)),
+    },
     signals,
   }
 }
@@ -261,8 +304,10 @@ export function localCoach(snapshot) {
   if (byKey.training.status === 'red') recommendations.push('Prioritise completing the planned sessions before adding training volume.')
   if (byKey.overload.status === 'red') recommendations.push('Review repeated stalls and consider a smaller load jump, rep progression or a deload.')
   if (byKey.overload.status === 'green') recommendations.push('Progressive overload is moving in the right direction; keep the current core lifts stable.')
+  if (byKey.recovery?.status === 'red' || (snapshot.checkin?.pain || 0) >= 4) recommendations.unshift('Pain or poor recovery is the priority: do not progress load or skill difficulty this week.')
 
   let calorieProposal = null
+  let maintenanceTransition = false
   const calories = Number(snapshot.goal.calories)
   const measured = snapshot.weight.kgWeek
   const targetRate = Math.max(0.05, Number(snapshot.goal.rateKgWeek) || 0.25)
@@ -272,6 +317,11 @@ export function localCoach(snapshot) {
     if (snapshot.goal.mode === 'lose' && measured > -targetRate * 0.5) calorieProposal = Math.max(800, calories - 100)
     if (snapshot.goal.mode === 'lose' && measured < -targetRate * 1.6) calorieProposal = calories + 100
   }
+  if (snapshot.goal.mode !== 'maintain' && snapshot.phase?.targetWeightKg && snapshot.phase?.currentWeightKg != null
+    && Math.abs(snapshot.phase.currentWeightKg - snapshot.phase.targetWeightKg) <= 0.5) {
+    maintenanceTransition = true
+    recommendations.unshift('Your target-weight range is reached. Consider a maintenance phase instead of continuing the gain or cut.')
+  }
   if (calorieProposal) recommendations.push(`Consider a small calorie adjustment from ${calories} to ${calorieProposal} kcal and reassess after more trend data.`)
 
   return {
@@ -280,9 +330,9 @@ export function localCoach(snapshot) {
       ? recommendations[0]
       : 'Keep collecting consistent training, nutrition and body-weight data.',
     signals: snapshot.signals,
-    recommendations,
-    nutritionProposal: calorieProposal ? { calories: calorieProposal } : null,
+    recommendations: recommendations.slice(0, 2),
+    nutritionProposal: maintenanceTransition ? { mode: 'maintain', calories } : calorieProposal ? { calories: calorieProposal } : null,
     trainingProposal: null,
+    confidence: snapshot.loggedDays >= 10 && snapshot.weight.points >= 4 ? 'medium' : 'low',
   }
 }
-

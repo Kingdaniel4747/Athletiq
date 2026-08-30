@@ -7,6 +7,7 @@ import { auditCat, auditLabel, auditReason, auditLine, fmtWhen } from './audit.j
 const EVENTS = [
   'auth.login.ok', 'auth.login.fail', 'auth.register.ok', 'auth.register.fail',
   'auth.register.denied', 'auth.logout', 'auth.logout.all',
+  'account.delete',
   'admin.user.disable', 'admin.user.enable', 'admin.invite.create',
   'admin.invite.revoke', 'admin.audit.clear', 'admin.denied'
 ]
@@ -34,13 +35,14 @@ describe('auditLabel', () => {
 describe('auditCat', () => {
   it('takes the filter category from the first segment', () => {
     expect(auditCat('auth.login.ok')).toBe('auth')
+    expect(auditCat('account.delete')).toBe('account')
     expect(auditCat('admin.invite.create')).toBe('admin')
   })
   it('survives a missing event name', () => {
     expect(auditCat(undefined)).toBe('')
   })
-  it('puts every known event in exactly auth or admin', () => {
-    expect([...new Set(EVENTS.map(auditCat))].sort()).toEqual(['admin', 'auth'])
+  it('puts every known event in a supported filter category', () => {
+    expect([...new Set(EVENTS.map(auditCat))].sort()).toEqual(['account', 'admin', 'auth'])
   })
 })
 

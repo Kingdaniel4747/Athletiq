@@ -13,8 +13,12 @@ import webpush from 'web-push';
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
 const WEB = path.resolve(process.env.WEB_DIR || path.join(process.cwd(), 'public'));
-const RP_ID = process.env.RP_ID || 'localhost';
-const ORIGIN = process.env.ORIGIN || 'http://localhost:8080';
+// `auto` is the zero-configuration default for the public Docker image. WebAuthn binds every
+// passkey to the exact origin/RP ID, so hard-coding localhost makes registration fail as soon as
+// the same image is opened through a real domain. Explicit values remain available for operators
+// who want to pin one canonical public URL.
+const RP_ID_SETTING = String(process.env.RP_ID || 'auto').trim();
+const ORIGIN_SETTING = String(process.env.ORIGIN || 'auto').trim().replace(/\/+$/, '');
 const RP_NAME = process.env.RP_NAME || 'AthletiQ';
 // Admin dashboard (issue): admins are matched by uid; INVITE_ONLY gates new signups behind a
 // code the admin generates. Both default off so a fresh self-hosted instance stays open.
@@ -37,8 +41,8 @@ const AI_API_KEY = String(process.env.AI_API_KEY || '').trim();
 const AI_MODEL = String(process.env.AI_MODEL || '').trim();
 const FOOD_USER_AGENT = String(process.env.FOOD_USER_AGENT || 'AthletiQ/1.0 (self-hosted)');
 const MAX_BODY = 5 * 1024 * 1024;
-// Secure cookies require HTTPS; over plain http://localhost the flag would drop the cookie
-const SECURE = /^https:/i.test(ORIGIN) ? ' Secure;' : '';
+const AUTO_RP_ID = !RP_ID_SETTING || /^auto$/i.test(RP_ID_SETTING);
+const AUTO_ORIGIN = !ORIGIN_SETTING || /^auto$/i.test(ORIGIN_SETTING);
 
 fs.mkdirSync(DATA, { recursive: true });
 
@@ -69,7 +73,8 @@ const vapidFile = path.join(DATA, 'vapid.json');
 let vapid;
 try { vapid = JSON.parse(fs.readFileSync(vapidFile, 'utf8')); }
 catch { vapid = webpush.generateVAPIDKeys(); fs.writeFileSync(vapidFile, JSON.stringify(vapid), { mode: 0o600 }); }
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || (SECURE ? ORIGIN : 'mailto:admin@localhost');
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT
+  || (!AUTO_ORIGIN && /^https:/i.test(ORIGIN_SETTING) ? ORIGIN_SETTING : 'mailto:admin@localhost');
 webpush.setVapidDetails(VAPID_SUBJECT, vapid.publicKey, vapid.privateKey);
 
 async function sendPush(userId, payload) {
@@ -128,29 +133,42 @@ function userNow(tz) {
       year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
     }).formatToParts(new Date());
     const g = t => parts.find(p => p.type === t)?.value;
-    return { date: `${g('year')}-${g('month')}-${g('day')}`, hhmm: `${g('hour')}:${g('minute')}` };
+    const shortDay = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(new Date());
+    const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(shortDay);
+    return { date: `${g('year')}-${g('month')}-${g('day')}`, hhmm: `${g('hour')}:${g('minute')}`, weekday };
   } catch { return null; } // unknown/invalid tz string — skip this user rather than guess
 }
 setInterval(() => {
   for (const user of db.users) {
     if (!db.subs.some(s => s.userId === user.id)) continue;
     const S = readState(user.id);
-    if (!S?.reminder?.on) continue;
-    const now = userNow(S.reminder.tz || 'UTC');
-    if (!now || S.reminder.time !== now.hhmm) continue;
-    if (user.lastReminder === now.date) continue;
-    if ((S.workouts || []).some(w => w.d === now.date)) continue;
-    const rid = effectiveRoutineId(S, now.date);
-    if (!rid) continue; // rest day — nothing planned
-    const routine = (S.routines || []).find(r => r.id === rid);
-    console.log('reminder firing', user.id, rid);
-    user.lastReminder = now.date;
-    saveDb();
-    sendPush(user.id, {
-      title: routine ? `${routine.emoji || '🏋️'} ${routine.name} today` : 'Workout planned today',
-      body: "It's on your plan — let's go 💪",
-      tag: 'day-reminder'
-    });
+    if (!S) continue;
+    const timezone = S.reminder?.tz || S.coachReminder?.tz || 'UTC';
+    const now = userNow(timezone);
+    if (!now) continue;
+    if (S.coachReminder?.on && S.coachReminder.time === now.hhmm
+      && Number(S.coachReminder.weekday) === now.weekday && user.lastCoachReminder !== now.date) {
+      const latestCheckin = Math.max(0, ...(S.profile?.checkins || []).map(row => Number(row.createdAt) || 0));
+      if (!latestCheckin || Date.now() - latestCheckin >= 6 * 86400000) {
+        user.lastCoachReminder = now.date;
+        saveDb();
+        sendPush(user.id, { title: 'AthletiQ weekly check-in', body: 'Sleep, hunger, energy, stress and pain — one minute for a better plan.', tag: 'coach-checkin' });
+      }
+    }
+    if (S.reminder?.on && S.reminder.time === now.hhmm && user.lastReminder !== now.date
+      && !(S.workouts || []).some(w => w.d === now.date)) {
+      const rid = effectiveRoutineId(S, now.date);
+      if (!rid) continue; // rest day — nothing planned
+      const routine = (S.routines || []).find(r => r.id === rid);
+      console.log('reminder firing', user.id, rid);
+      user.lastReminder = now.date;
+      saveDb();
+      sendPush(user.id, {
+        title: routine ? `${routine.emoji || '🏋️'} ${routine.name} today` : 'Workout planned today',
+        body: "It's on your plan — let's go 💪",
+        tag: 'day-reminder'
+      });
+    }
   }
 // Checked every 10s (not 60s) — ticks aren't aligned to the top of the minute, so a 60s
 // interval could sit on your target minute for up to 59s before noticing. 10s caps that at ~9s.
@@ -209,10 +227,98 @@ function requireAdmin(req, res) {
   if (!isAdmin(user)) { audit(req, 'admin.denied', { ok: false, user }); json(res, 403, { error: 'forbidden' }); return null; }
   return user;
 }
-function sessionCookie(user) {
-  return `gymsid=${makeSession(user)}; Path=/; Max-Age=${SESSION_DAYS * 86400}; HttpOnly;${SECURE} SameSite=Lax`;
+function firstHeader(req, name) {
+  return String(req.headers[name] || '').split(',')[0].trim();
 }
-const clearCookie = `gymsid=; Path=/; Max-Age=0; HttpOnly;${SECURE} SameSite=Lax`;
+function cleanHost(value) {
+  // Host is only used to reconstruct the public origin. Reject control characters, paths and
+  // user-info instead of reflecting an arbitrary Host header into WebAuthn options.
+  const host = String(value || '').trim();
+  return host && host.length <= 255 && !/[\s\\/@]/.test(host) ? host : '';
+}
+function validHttpOrigin(value) {
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) return null;
+    return url.origin;
+  } catch { return null; }
+}
+function requestWebAuthnContext(req) {
+  const forwardedHost = cleanHost(firstHeader(req, 'x-forwarded-host'));
+  const directHost = cleanHost(firstHeader(req, 'host'));
+  const host = forwardedHost || directHost;
+  const forwardedProto = firstHeader(req, 'x-forwarded-proto').toLowerCase();
+  const proto = ['http', 'https'].includes(forwardedProto)
+    ? forwardedProto
+    : (req.socket?.encrypted ? 'https' : 'http');
+  const inferredOrigin = host ? validHttpOrigin(`${proto}://${host}`) : null;
+  const browserOrigin = validHttpOrigin(firstHeader(req, 'origin'));
+  const origin = AUTO_ORIGIN ? (browserOrigin || inferredOrigin) : validHttpOrigin(ORIGIN_SETTING);
+  if (!origin) return { available: false, error: 'AthletiQ could not determine its public URL.' };
+
+  const originUrl = new URL(origin);
+  if (AUTO_ORIGIN && browserOrigin && inferredOrigin && new URL(browserOrigin).host !== new URL(inferredOrigin).host) {
+    return {
+      available: false, origin, rpID: AUTO_RP_ID ? originUrl.hostname : RP_ID_SETTING,
+      error: 'The reverse proxy forwarded a host that does not match the browser origin.',
+    };
+  }
+  const rpID = AUTO_RP_ID ? originUrl.hostname : RP_ID_SETTING.toLowerCase();
+  const domainMatches = originUrl.hostname === rpID || originUrl.hostname.endsWith(`.${rpID}`);
+  if (!domainMatches) return {
+    available: false, origin, rpID,
+    error: `RP_ID ${rpID} is not the current domain or one of its parent domains.`,
+  };
+  const local = originUrl.hostname === 'localhost' || originUrl.hostname.endsWith('.localhost');
+  const secure = originUrl.protocol === 'https:' || (originUrl.protocol === 'http:' && local);
+  if (!secure) return {
+    available: false, origin, rpID, secure: false,
+    error: 'Passkeys require HTTPS when AthletiQ is not opened on localhost.',
+  };
+  return { available: true, origin, rpID, secure, automatic: AUTO_ORIGIN || AUTO_RP_ID };
+}
+function requestIsHttps(req) {
+  if (firstHeader(req, 'x-forwarded-proto').toLowerCase() === 'https') return true;
+  if (req.socket?.encrypted) return true;
+  return !AUTO_ORIGIN && /^https:/i.test(ORIGIN_SETTING);
+}
+function sessionCookie(req, user) {
+  const secure = requestIsHttps(req) ? ' Secure;' : '';
+  return `gymsid=${makeSession(user)}; Path=/; Max-Age=${SESSION_DAYS * 86400}; HttpOnly;${secure} SameSite=Lax`;
+}
+function clearCookie(req) {
+  const secure = requestIsHttps(req) ? ' Secure;' : '';
+  return `gymsid=; Path=/; Max-Age=0; HttpOnly;${secure} SameSite=Lax`;
+}
+
+/* ---------- lightweight abuse limits ---------- */
+const rateBuckets = new Map();
+const RATE_RULES = {
+  'POST /api/register/options': [12, 300000],
+  'POST /api/register/verify': [20, 300000],
+  'POST /api/login/options': [30, 300000],
+  'POST /api/login/verify': [30, 300000],
+  'GET /api/nutrition/product': [60, 60000],
+  'POST /api/coach/recommend': [10, 600000],
+};
+function consumeRate(req, key) {
+  const rule = RATE_RULES[key];
+  if (!rule) return null;
+  const [limit, windowMs] = rule;
+  const address = req.socket?.remoteAddress || 'unknown';
+  const bucketKey = `${address}|${key}`;
+  const now = Date.now();
+  let bucket = rateBuckets.get(bucketKey);
+  if (!bucket || bucket.reset <= now) bucket = { count: 0, reset: now + windowMs };
+  bucket.count++;
+  rateBuckets.set(bucketKey, bucket);
+  if (bucket.count <= limit) return null;
+  return Math.max(1, Math.ceil((bucket.reset - now) / 1000));
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of rateBuckets) if (bucket.reset <= now) rateBuckets.delete(key);
+}, 600000).unref();
 
 /* ---------- challenge store (in-memory, 5 min TTL) ---------- */
 const challenges = new Map(); // cid -> {challenge, name?, uid?, exp}
@@ -363,20 +469,22 @@ function parseAssistantJson(data) {
   return JSON.parse(content.slice(first, last + 1));
 }
 
-function validateCoachRecommendation(raw, candidates) {
+function validateCoachRecommendation(raw, candidates, snapshot) {
   const allowed = new Set((candidates || []).map(item => String(item.id)));
   const bounded = (value, min, max) => Math.max(min, Math.min(max, Math.round(Number(value) || 0)));
   const recommendation = {
     summary: String(raw?.summary || 'Analysis complete.').slice(0, 800),
     recommendations: (Array.isArray(raw?.recommendations) ? raw.recommendations : [])
-      .map(item => String(item).slice(0, 500)).filter(Boolean).slice(0, 8),
+      .map(item => String(item).slice(0, 500)).filter(Boolean).slice(0, 2),
     nutritionProposal: null,
     trainingProposal: null,
   };
   const nutrition = raw?.nutritionProposal;
   if (nutrition && typeof nutrition === 'object') {
+    const currentCalories = numberIn(snapshot?.goal?.calories);
+    const proposedCalories = numberIn(nutrition.calories);
     recommendation.nutritionProposal = {
-      ...(numberIn(nutrition.calories) ? { calories: bounded(nutrition.calories, 800, 6000) } : {}),
+      ...(proposedCalories ? { calories: bounded(currentCalories ? Math.max(currentCalories - 200, Math.min(currentCalories + 200, proposedCalories)) : proposedCalories, 1200, 6000) } : {}),
       ...(numberIn(nutrition.protein) ? { protein: bounded(nutrition.protein, 10, 400) } : {}),
       ...(numberIn(nutrition.carbs) ? { carbs: bounded(nutrition.carbs, 10, 900) } : {}),
       ...(numberIn(nutrition.fat) ? { fat: bounded(nutrition.fat, 10, 300) } : {}),
@@ -400,6 +508,8 @@ function validateCoachRecommendation(raw, candidates) {
       days,
     };
   }
+  const pain = Math.max(numberIn(snapshot?.recovery?.maxPain), numberIn(snapshot?.checkin?.pain), numberIn(snapshot?.calisthenics?.pain));
+  if (pain >= 4) recommendation.trainingProposal = null;
   return recommendation;
 }
 
@@ -517,6 +627,7 @@ const routes = {
     allow_guest: ALLOW_GUEST,
     mealie_enabled: !!(MEALIE_URL && MEALIE_API_TOKEN),
     ai_enabled: !!(AI_API_URL && AI_MODEL),
+    webauthn: requestWebAuthnContext(req),
   }),
 
   'GET /api/nutrition/product': async (req, res) => {
@@ -576,7 +687,7 @@ const routes = {
     const context = body?.context || {};
     if (!snapshot || typeof snapshot !== 'object') return json(res, 400, { error: 'snapshot required' });
     const candidates = Array.isArray(context.candidates) ? context.candidates.slice(0, 140) : [];
-    const system = `You are the optional coach inside a self-hosted fitness tracker. Analyse only the supplied aggregate trends. Write all user-facing text in the language identified by the supplied language code. Do not diagnose disease, estimate water retention, prescribe medication, or claim certainty from sparse data. Preserve consistency in core exercises; suggest variety only when justified. All changes are proposals requiring user confirmation. Use only exercise ids from candidates. Return JSON only with this shape: {"summary":"...","recommendations":["..."],"nutritionProposal":{"calories":number,"protein":number,"carbs":number,"fat":number,"fiber":number,"rationale":"..."}|null,"trainingProposal":{"name":"...","rationale":"...","days":[{"weekday":0,"name":"...","icon":"dumbbell","exercises":[{"id":"...","sets":3,"reps":8}]}]}|null}. Weekday is 0 Sunday through 6 Saturday.`;
+    const system = `You are the optional coach inside a self-hosted fitness tracker. Analyse only the supplied aggregate trends. Write all user-facing text in the language identified by the supplied language code. Do not diagnose disease, estimate water retention, prescribe medication, or claim certainty from sparse data. Return at most two prioritised recommendations and explain why. Preserve consistency in core exercises; suggest variety only when justified. Never increase load, volume or skill difficulty when joint/tendon pain is 4/10 or higher. Calorie changes must be small and reassessed after at least another week. All changes are proposals requiring user confirmation. Use only exercise ids from candidates. Return JSON only with this shape: {"summary":"...","recommendations":["..."],"nutritionProposal":{"calories":number,"protein":number,"carbs":number,"fat":number,"fiber":number,"rationale":"..."}|null,"trainingProposal":{"name":"...","rationale":"...","days":[{"weekday":0,"name":"...","icon":"dumbbell","exercises":[{"id":"...","sets":3,"reps":8}]}]}|null}. Weekday is 0 Sunday through 6 Saturday.`;
     try {
       const data = await fetchJson(AI_API_URL, {
         method: 'POST',
@@ -589,12 +700,12 @@ const routes = {
           temperature: 0.2,
           messages: [
             { role: 'system', content: system },
-            { role: 'user', content: JSON.stringify({ language: context.language || 'en', snapshot, muscleLoad: context.muscleLoad || [], currentPlan: context.currentPlan || [], candidates }) },
+            { role: 'user', content: JSON.stringify({ language: context.language || 'en', snapshot, profile: context.profile || {}, muscleLoad: context.muscleLoad || [], currentPlan: context.currentPlan || [], candidates }) },
           ],
         }),
       }, 45000);
       const raw = parseAssistantJson(data);
-      json(res, 200, { recommendation: validateCoachRecommendation(raw, candidates) });
+      json(res, 200, { recommendation: validateCoachRecommendation(raw, candidates, snapshot) });
     } catch (error) {
       console.error('coach provider failed', error.message);
       json(res, 502, { error: `AI coach request failed: ${error.message}` });
@@ -608,6 +719,8 @@ const routes = {
   },
 
   'POST /api/register/options': async (req, res) => {
+    const webauthn = requestWebAuthnContext(req);
+    if (!webauthn.available) return json(res, 400, { code: 'webauthn_config', error: webauthn.error, webauthn });
     const body = await readBody(req);
     const name = String(body.name || '').trim().slice(0, 40);
     if (!name) return json(res, 400, { error: 'name required' });
@@ -619,13 +732,13 @@ const routes = {
     }
     const uid = crypto.randomBytes(12).toString('base64url');
     const options = await generateRegistrationOptions({
-      rpName: RP_NAME, rpID: RP_ID,
+      rpName: RP_NAME, rpID: webauthn.rpID,
       userID: Buffer.from(uid), userName: name, userDisplayName: name,
       attestationType: 'none',
       authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
       excludeCredentials: []
     });
-    const cid = putChallenge({ challenge: options.challenge, name, uid, code });
+    const cid = putChallenge({ challenge: options.challenge, name, uid, code, origin: webauthn.origin, rpID: webauthn.rpID });
     json(res, 200, { cid, options });
   },
 
@@ -641,8 +754,8 @@ const routes = {
       verification = await verifyRegistrationResponse({
         response: body.credential,
         expectedChallenge: c.challenge,
-        expectedOrigin: ORIGIN,
-        expectedRPID: RP_ID,
+        expectedOrigin: c.origin,
+        expectedRPID: c.rpID,
         requireUserVerification: false
       });
     } catch (e) {
@@ -673,20 +786,23 @@ const routes = {
     db.users.push(user);
     db.creds.push({
       id: credential.id, userId: user.id,
+      rpID: c.rpID,
       publicKey: Buffer.from(credential.publicKey).toString('base64url'),
       counter: credential.counter || 0,
       transports: body.credential?.response?.transports || []
     });
     saveDb();
     audit(req, 'auth.register.ok', { user, msg: invite ? invite.code : null });
-    json(res, 200, { user: { id: user.id, name: user.name, admin: isAdmin(user) } }, { 'Set-Cookie': sessionCookie(user) });
+    json(res, 200, { user: { id: user.id, name: user.name, admin: isAdmin(user) } }, { 'Set-Cookie': sessionCookie(req, user) });
   },
 
   'POST /api/login/options': async (req, res) => {
+    const webauthn = requestWebAuthnContext(req);
+    if (!webauthn.available) return json(res, 400, { code: 'webauthn_config', error: webauthn.error, webauthn });
     const options = await generateAuthenticationOptions({
-      rpID: RP_ID, userVerification: 'preferred', allowCredentials: []
+      rpID: webauthn.rpID, userVerification: 'preferred', allowCredentials: []
     });
-    const cid = putChallenge({ challenge: options.challenge });
+    const cid = putChallenge({ challenge: options.challenge, origin: webauthn.origin, rpID: webauthn.rpID });
     json(res, 200, { cid, options });
   },
 
@@ -710,8 +826,8 @@ const routes = {
       verification = await verifyAuthenticationResponse({
         response: body.credential,
         expectedChallenge: c.challenge,
-        expectedOrigin: ORIGIN,
-        expectedRPID: RP_ID,
+        expectedOrigin: c.origin,
+        expectedRPID: c.rpID,
         requireUserVerification: false,
         credential: {
           id: cred.id,
@@ -740,7 +856,7 @@ const routes = {
       return json(res, 403, { error: 'this account has been disabled' });
     }
     audit(req, 'auth.login.ok', { user });
-    json(res, 200, { user: { id: user.id, name: user.name, admin: isAdmin(user) } }, { 'Set-Cookie': sessionCookie(user) });
+    json(res, 200, { user: { id: user.id, name: user.name, admin: isAdmin(user) } }, { 'Set-Cookie': sessionCookie(req, user) });
   },
 
   // Reads the session purely so the sign-out can be recorded; the cookie is cleared either way.
@@ -748,7 +864,7 @@ const routes = {
   'POST /api/logout': async (req, res) => {
     const user = readSession(req);
     if (user) audit(req, 'auth.logout', { user });
-    json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie });
+    json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie(req) });
   },
 
   // "Sign out everywhere" — bumps this user's session version, which invalidates every cookie
@@ -761,7 +877,33 @@ const routes = {
     user.sv = sessionVersion(user) + 1;
     saveDb();
     audit(req, 'auth.logout.all', { user });
-    json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie });
+    json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie(req) });
+  },
+
+  'GET /api/account/export': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    json(res, 200, {
+      exportedAt: new Date().toISOString(),
+      user: { id: user.id, name: user.name, created: user.created },
+      state: readState(user.id),
+      passkeys: db.creds.filter(credential => credential.userId === user.id).length,
+    });
+  },
+
+  'DELETE /api/account': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    if (String(body.confirm || '').trim() !== user.name) return json(res, 400, { error: 'profile name confirmation does not match' });
+    audit(req, 'account.delete', { user });
+    cancelRestTimer(user.id);
+    db.creds = db.creds.filter(credential => credential.userId !== user.id);
+    db.subs = db.subs.filter(subscription => subscription.userId !== user.id);
+    db.users = db.users.filter(row => row.id !== user.id);
+    saveDb();
+    try { fs.unlinkSync(stateFile(user.id)); } catch {}
+    json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie(req) });
   },
 
   'GET /api/data': async (req, res) => {
@@ -980,9 +1122,11 @@ http.createServer(async (req, res) => {
     if (!url.pathname.startsWith('/api') && serveWeb(req, res, url.pathname)) return;
     return json(res, 404, { error: 'not found' });
   }
+  const retryAfter = consumeRate(req, key);
+  if (retryAfter) return json(res, 429, { error: 'too many requests — try again shortly' }, { 'Retry-After': String(retryAfter) });
   try { await handler(req, res); }
   catch (e) {
     console.error(key, e);
     if (!res.headersSent) json(res, 500, { error: 'server error' });
   }
-}).listen(PORT, () => console.log(`AthletiQ on :${PORT} (rpID=${RP_ID}, origin=${ORIGIN})`));
+}).listen(PORT, () => console.log(`AthletiQ on :${PORT} (rpID=${RP_ID_SETTING}, origin=${ORIGIN_SETTING})`));

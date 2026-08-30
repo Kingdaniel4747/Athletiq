@@ -30,6 +30,8 @@ import NutritionHome from './views/NutritionHome.jsx'
 import NutritionFoods from './views/NutritionFoods.jsx'
 import NutritionProgress from './views/NutritionProgress.jsx'
 import Coach from './views/Coach.jsx'
+import Onboarding from './views/Onboarding.jsx'
+import Calisthenics from './views/Calisthenics.jsx'
 
 bindUI(useUI)   // lets the shared controls open sheets without importing the store at module scope
 
@@ -59,6 +61,10 @@ function Shell() {
   useWakeLock(!!S.active && S.keepAwake !== false)
 
   const authed = user || isGuest
+  const needsOnboarding = authed && !S.profile?.completed && !S.profile?.skipped
+  useEffect(() => {
+    if (needsOnboarding && loc.pathname !== '/onboarding') navigate('/onboarding', { replace: true })
+  }, [needsOnboarding, loc.pathname, navigate])
   if (!ready && !authed) return (
     <div id="app">
       <div style={{ paddingTop: '44vh', display: 'flex', justifyContent: 'center', fontSize: 34, color: 'var(--label-3)' }}>
@@ -70,7 +76,7 @@ function Shell() {
   return (
     <>
       <div id="app">
-        {authed && loc.pathname !== '/workout' && <ModeSwitch />}
+        {authed && !['/workout', '/onboarding'].includes(loc.pathname) && <ModeSwitch />}
         {authed && <MediaDownloadPrompt hidden={loc.pathname === '/workout'} />}
         {/* keyed on the route: a view that throws is contained, and switching tabs
             re-mounts the boundary, so the tab bar is always a way out. The download
@@ -80,6 +86,8 @@ function Shell() {
             {!authed ? <Login /> : (
               <Routes>
                 <Route path="/home" element={<Home />} />
+                <Route path="/onboarding" element={<Onboarding />} />
+                <Route path="/calisthenics" element={<Calisthenics />} />
                 <Route path="/plan" element={<Plan />} />
                 <Route path="/plan/r/:id" element={<RoutineEdit />} />
                 <Route path="/workout" element={<Workout />} />
